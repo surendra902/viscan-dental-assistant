@@ -149,36 +149,3 @@ All data is strictly synthetic with zero real patient information (PDF p1, p2):
 3. **DICOM Thumbnail Grounding**: Connect findings directly to DICOM bounding-box slice coordinates.
 4. **Streaming Voice Pipeline**: Full WebSocket duplex streaming (Audio chunk -> Streaming STT -> Token streaming).
 
----
-
-## 8. Hosting & Deployment (Render vs. Vercel)
-
-### Why Render is the Recommended Choice
-| Architecture Feature | Render (Recommended) | Vercel |
-| :--- | :--- | :--- |
-| **Runtime Model** | **Persistent Python Process** | Serverless Lambdas / Ephemeral |
-| **In-Memory Session State** | **Maintained across turns** | Reset on each cold start / invocation |
-| **FastAPI Support** | **Native `uvicorn` web service** | Requires `@vercel/python` adapter |
-| **Audio File Uploads** | Standard multipart streaming | Serverless payload & execution caps |
-| **Deployment Automation** | **Native `render.yaml` Blueprint** | Manual serverless routing configuration |
-
-Because **Feature C (Multi-Turn Conversational Follow-Up)** relies on session state persistence without requiring an external database, **Render provides an authentic, reliable deployment environment**.
-
-### 1-Click Deployment on Render
-1. Open [dashboard.render.com](https://dashboard.render.com/) and click **New** > **Blueprint**.
-2. Select your repository: `https://github.com/surendra902/viscan-dental-assistant`.
-3. Render automatically detects [`render.yaml`](render.yaml) and configures the Python web service.
-4. Add your environment variable:
-   - `OPENROUTER_API_KEY`: `your_openrouter_api_key` (e.g. from OpenRouter dashboard)
-5. Click **Apply**. Your app will be live at `https://viscan-dental-assistant.onrender.com`.
-
----
-
-## 9. Deliverables Index
-
-- **Architecture Document**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Documented API Demo Calls & Outputs**: [docs/DEMO.md](docs/DEMO.md)
-- **Production Notes (Privacy, Auth, Latency, Cost)**: [docs/PRODUCTION_NOTES.md](docs/PRODUCTION_NOTES.md)
-- **Mock Data**: [data/patients.json](data/patients.json) & [data/reports.json](data/reports.json)
-- **Render Blueprint**: [render.yaml](render.yaml)
-- **Live GitHub Repository**: [https://github.com/surendra902/viscan-dental-assistant](https://github.com/surendra902/viscan-dental-assistant)
