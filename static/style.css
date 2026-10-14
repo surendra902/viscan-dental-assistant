@@ -575,10 +575,12 @@ body::before {
   border-color: var(--blue-500);
 }
 
-.btn-mic.recording {
-  background: var(--red-700);
-  color: white;
-  border-color: var(--red-700);
+.btn-mic.recording,
+.btn.recording,
+.btn--icon.recording {
+  background: var(--red-700) !important;
+  color: white !important;
+  border-color: var(--red-700) !important;
   animation: pulse-ring 1.2s infinite;
 }
 

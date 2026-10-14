@@ -271,29 +271,104 @@ document.addEventListener("DOMContentLoaded", () => {
   btnProcessDictate.addEventListener("click", processDictation);
 
   /* ---------- Speech Recognition / Voice Input Handlers ---------- */
-  let isRecording = false;
-  let recognition = null;
-  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
+  function getSpeechRecognition() {
+    const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechClass) return null;
+    try {
+      const rec = new SpeechClass();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
+      return rec;
+    } catch (e) {
+      console.warn("SpeechRecognition initialization failed:", e);
+      return null;
+    }
   }
+
+  let activeRecognition = null;
+  let activeVoiceTarget = null; // 'chat' | 'dictate' | null
 
   // Voice Chat Button
   btnVoiceChat.addEventListener("click", () => {
-    if (recognition) {
-      btnVoiceChat.classList.add("recording");
-      recognition.onresult = (e) => {
-        chatInput.value = e.results[0][0].transcript;
-        btnVoiceChat.classList.remove("recording");
-        chatForm.dispatchEvent(new Event("submit"));
-      };
-      recognition.onerror = () => btnVoiceChat.classList.remove("recording");
-      recognition.onend = () => btnVoiceChat.classList.remove("recording");
-      recognition.start();
-    } else {
+    // 1. Toggle off if already listening on chat
+    if (activeVoiceTarget === "chat") {
+      if (activeRecognition) {
+        try { activeRecognition.stop(); } catch (_) {}
+        activeRecognition = null;
+      }
+      activeVoiceTarget = null;
+      btnVoiceChat.classList.remove("recording");
+      return;
+    }
+
+    // 2. Safely stop any other active voice recording (e.g. dictation)
+    if (activeRecognition) {
+      try { activeRecognition.stop(); } catch (_) {}
+      activeRecognition = null;
+      activeVoiceTarget = null;
+      btnRecordAudio.classList.remove("recording");
+      recordBtnText.textContent = "Voice Dictation";
+    }
+
+    const rec = getSpeechRecognition();
+    if (!rec) {
+      // Browser does not support Web Speech API
+      chatInput.value = "Open Priya Sharma's latest OPG report";
+      chatForm.dispatchEvent(new Event("submit"));
+      return;
+    }
+
+    activeRecognition = rec;
+    activeVoiceTarget = "chat";
+    btnVoiceChat.classList.add("recording");
+    let hasResult = false;
+
+    rec.onresult = (e) => {
+      if (e.results && e.results[0] && e.results[0][0]) {
+        const transcript = e.results[0][0].transcript.trim();
+        if (transcript) {
+          hasResult = true;
+          chatInput.value = transcript;
+          chatForm.dispatchEvent(new Event("submit"));
+        }
+      }
+    };
+
+    rec.onerror = (e) => {
+      console.warn("Voice chat recognition error:", e.error);
+      btnVoiceChat.classList.remove("recording");
+      activeVoiceTarget = null;
+      activeRecognition = null;
+
+      // If speech recognition failed on remote host (e.g. network / not-allowed / audio-capture)
+      // and no speech was transcribed, provide seamless fallback query so user is never stranded
+      if (!hasResult) {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
+          appendBubble("bot", "Viscan Voice Assistant", `Microphone or cloud STT unavailable (${e.error}). Submitting sample voice query: "Open Priya Sharma's latest OPG report".`);
+          chatInput.value = "Open Priya Sharma's latest OPG report";
+          chatForm.dispatchEvent(new Event("submit"));
+        } else if (e.error === "no-speech") {
+          appendBubble("bot", "Viscan Voice Assistant", "No speech was detected. Please click the mic again or type your query.");
+        }
+      }
+    };
+
+    rec.onend = () => {
+      btnVoiceChat.classList.remove("recording");
+      if (activeVoiceTarget === "chat") {
+        activeVoiceTarget = null;
+        activeRecognition = null;
+      }
+    };
+
+    try {
+      rec.start();
+    } catch (err) {
+      console.warn("rec.start() error:", err);
+      btnVoiceChat.classList.remove("recording");
+      activeVoiceTarget = null;
+      activeRecognition = null;
       chatInput.value = "Open Priya Sharma's latest OPG report";
       chatForm.dispatchEvent(new Event("submit"));
     }
@@ -301,33 +376,83 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Voice Dictate Button
   btnRecordAudio.addEventListener("click", () => {
-    if (recognition) {
-      if (!isRecording) {
-        isRecording = true;
-        recordBtnText.textContent = "Listening...";
-        btnRecordAudio.classList.add("recording");
-        recognition.onresult = (e) => {
-          dictateInput.value = e.results[0][0].transcript;
-          isRecording = false;
-          recordBtnText.textContent = "Voice Dictation";
-          btnRecordAudio.classList.remove("recording");
-          processDictation();
-        };
-        recognition.onerror = () => {
-          isRecording = false;
-          recordBtnText.textContent = "Voice Dictation";
-          btnRecordAudio.classList.remove("recording");
-        };
-        recognition.onend = () => {
-          isRecording = false;
-          recordBtnText.textContent = "Voice Dictation";
-          btnRecordAudio.classList.remove("recording");
-        };
-        recognition.start();
-      } else {
-        recognition.stop();
+    // 1. Toggle off if already listening on dictation
+    if (activeVoiceTarget === "dictate") {
+      if (activeRecognition) {
+        try { activeRecognition.stop(); } catch (_) {}
+        activeRecognition = null;
       }
-    } else {
+      activeVoiceTarget = null;
+      btnRecordAudio.classList.remove("recording");
+      recordBtnText.textContent = "Voice Dictation";
+      return;
+    }
+
+    // 2. Safely stop any active chat voice recording
+    if (activeRecognition) {
+      try { activeRecognition.stop(); } catch (_) {}
+      activeRecognition = null;
+      activeVoiceTarget = null;
+      btnVoiceChat.classList.remove("recording");
+    }
+
+    const rec = getSpeechRecognition();
+    if (!rec) {
+      // Browser does not support Web Speech API
+      dictateInput.value = "Lower right third molar is horizontally impacted";
+      processDictation();
+      return;
+    }
+
+    activeRecognition = rec;
+    activeVoiceTarget = "dictate";
+    btnRecordAudio.classList.add("recording");
+    recordBtnText.textContent = "Listening...";
+    let hasResult = false;
+
+    rec.onresult = (e) => {
+      if (e.results && e.results[0] && e.results[0][0]) {
+        const transcript = e.results[0][0].transcript.trim();
+        if (transcript) {
+          hasResult = true;
+          dictateInput.value = transcript;
+          processDictation();
+        }
+      }
+    };
+
+    rec.onerror = (e) => {
+      console.warn("Dictation recognition error:", e.error);
+      btnRecordAudio.classList.remove("recording");
+      recordBtnText.textContent = "Voice Dictation";
+      activeVoiceTarget = null;
+      activeRecognition = null;
+
+      if (!hasResult) {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
+          dictateInput.value = "Lower right third molar is horizontally impacted";
+          processDictation();
+        }
+      }
+    };
+
+    rec.onend = () => {
+      btnRecordAudio.classList.remove("recording");
+      recordBtnText.textContent = "Voice Dictation";
+      if (activeVoiceTarget === "dictate") {
+        activeVoiceTarget = null;
+        activeRecognition = null;
+      }
+    };
+
+    try {
+      rec.start();
+    } catch (err) {
+      console.warn("rec.start() error:", err);
+      btnRecordAudio.classList.remove("recording");
+      recordBtnText.textContent = "Voice Dictation";
+      activeVoiceTarget = null;
+      activeRecognition = null;
       dictateInput.value = "Lower right third molar is horizontally impacted";
       processDictation();
     }
