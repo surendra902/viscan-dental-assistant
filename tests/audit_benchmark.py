@@ -1,10 +1,12 @@
+import os
+import sys
 import time
 import json
 import urllib.request
 import urllib.error
 import urllib.parse
 
-BASE = "http://127.0.0.1:8000"
+BASE = os.getenv("TARGET_URL", "http://127.0.0.1:8000").rstrip("/")
 
 def request(method, path, data=None, is_json=True):
     url = BASE + path
@@ -21,7 +23,7 @@ def request(method, path, data=None, is_json=True):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     t0 = time.perf_counter()
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             elapsed_ms = (time.perf_counter() - t0) * 1000
             res_body = resp.read().decode("utf-8")
             status = resp.status
@@ -34,35 +36,39 @@ def request(method, path, data=None, is_json=True):
         elapsed_ms = (time.perf_counter() - t0) * 1000
         return 500, {"error": str(e)}, elapsed_ms
 
-print("=== STARTING AUDIT RUN ===")
+print(f"=== STARTING AUDIT RUN ON {BASE} ===")
 
 tests = [
-    ("Health Check", "GET", "/health", None, True),
-    ("Patient Directory", "GET", "/patients", None, True),
-    ("Patient Reports Existing (P001)", "GET", "/reports/P001", None, True),
-    ("Patient Reports Nonexistent (P999)", "GET", "/reports/P999", None, True),
-    ("Feature A: Exact Retrieval (Priya Sharma OPG)", "POST", "/chat", {"message": "Open Priya Sharma's latest OPG report", "session_id": "audit-1"}, True),
-    ("Feature A: Ambiguous Identity (Priya OPG)", "POST", "/chat", {"message": "Open Priya's latest OPG report", "session_id": "audit-2"}, True),
-    ("Feature A: Missing Report (Sara Khan CBCT)", "POST", "/chat", {"message": "Open Sara Khan's latest CBCT report", "session_id": "audit-3"}, True),
-    ("Feature A: Patient ID lookup (P003 CBCT)", "POST", "/chat", {"message": "Open P003's CBCT report", "session_id": "audit-4"}, True),
-    ("Feature C: Follow-up Unambiguous (Summarize her report)", "POST", "/chat", {"message": "Summarize her report", "session_id": "audit-1"}, True),
-    ("Feature C: Follow-up With No Prior Context", "POST", "/chat", {"message": "Summarize her report", "session_id": "audit-empty"}, True),
-    ("Feature B: Valid Dictation", "POST", "/dictate", {"transcript": "Lower right third molar is horizontally impacted", "session_id": "audit-1"}, True),
-    ("Feature B: Unsupported Claims Dictation", "POST", "/dictate", {"transcript": "Patient has dragon teeth with quantum decay", "session_id": "audit-1"}, True),
-    ("Feature B: Clinical Uncertainty Dictation", "POST", "/dictate", {"transcript": "Mild periapical radiolucency suggestive of apical periodontitis on tooth 36", "session_id": "audit-1"}, True),
-    ("Voice Intake: Typed Transcript Fallback", "POST", "/transcribe", {"transcript_fallback": "Deep occlusal caries on tooth 16"}, False),
+    ("Health Check", "GET", "/health", None, True, lambda s, p: s == 200 and p.get("status") == "healthy"),
+    ("Patient Directory", "GET", "/patients", None, True, lambda s, p: s == 200 and len(p) >= 6),
+    ("Patient Reports Existing (P001)", "GET", "/reports/P001", None, True, lambda s, p: s == 200 and len(p) >= 2),
+    ("Patient Reports Nonexistent (P999)", "GET", "/reports/P999", None, True, lambda s, p: s == 404),
+    ("Feature A: Exact Retrieval (Priya Sharma OPG)", "POST", "/chat", {"message": "Open Priya Sharma's latest OPG report", "session_id": "audit-1"}, True, lambda s, p: s == 200 and p.get("report", {}).get("report_id") == "R101"),
+    ("Feature A: Ambiguous Identity (Priya OPG)", "POST", "/chat", {"message": "Open Priya's latest OPG report", "session_id": "audit-2"}, True, lambda s, p: s == 200 and p.get("status") == "ambiguous"),
+    ("Feature A: Disambiguation Modality Retention", "POST", "/chat", {"message": "Priya Sharma", "session_id": "audit-2"}, True, lambda s, p: s == 200 and p.get("report", {}).get("report_id") == "R101"),
+    ("Feature A: Missing Report (Sara Khan CBCT)", "POST", "/chat", {"message": "Open Sara Khan's latest CBCT report", "session_id": "audit-3"}, True, lambda s, p: s == 200 and p.get("status") == "not_found" and p.get("report") is None),
+    ("Feature A: Patient Switch Does Not Leak Report", "POST", "/chat", {"message": "Summarize her report", "session_id": "audit-3"}, True, lambda s, p: s == 200 and (p.get("report") is None or p.get("report", {}).get("patient_id") == "P004")),
+    ("Feature C: Follow-up Unambiguous (Priya Sharma)", "POST", "/chat", {"message": "Summarize her report", "session_id": "audit-1"}, True, lambda s, p: s == 200 and p.get("report", {}).get("patient_id") == "P001"),
+    ("Feature C: Follow-up With No Prior Context", "POST", "/chat", {"message": "Summarize her report", "session_id": "audit-empty"}, True, lambda s, p: s == 200 and p.get("status") == "ambiguous"),
+    ("Feature B: Valid Dictation", "POST", "/dictate", {"transcript": "Lower right third molar is horizontally impacted", "session_id": "audit-1"}, True, lambda s, p: s == 200 and p.get("structured_findings", [{}])[0].get("is_supported") is True),
+    ("Feature B: Unsupported Claims Dictation", "POST", "/dictate", {"transcript": "Patient has dragon teeth with quantum decay", "session_id": "audit-1"}, True, lambda s, p: s == 200 and len(p.get("unsupported_claims", [])) > 0),
+    ("Feature B: Impossible Tooth Rejected", "POST", "/dictate", {"transcript": "Tooth 99 has caries", "session_id": "audit-1"}, True, lambda s, p: s == 200 and p.get("structured_findings", [{}])[0].get("is_supported") is False),
+    ("Feature B: Source Uncertainty Preservation", "POST", "/dictate", {"transcript": "Possible caries in tooth 16", "session_id": "audit-1"}, True, lambda s, p: s == 200 and len(p.get("uncertainties", [])) > 0),
+    ("Voice Intake: Typed Transcript Fallback", "POST", "/transcribe", {"transcript_fallback": "Deep occlusal caries on tooth 16"}, False, lambda s, p: s == 200 and p.get("source") == "typed_transcript"),
 ]
 
-results = []
-for name, method, path, data, is_json in tests:
+all_passed = True
+for name, method, path, data, is_json, validator in tests:
     status, payload, ms = request(method, path, data, is_json)
-    passed = status in [200, 404]
-    results.append((name, status, ms, payload))
+    try:
+        passed = validator(status, payload)
+    except Exception:
+        passed = False
+
+    if not passed:
+        all_passed = False
     print(f"[{'PASS' if passed else 'FAIL'}] {name} -> Status: {status} | Latency: {ms:.1f}ms")
 
-print("\n=== DETAILED FINDINGS ===")
-for name, status, ms, payload in results:
-    if "Feature" in name:
-        print(f"\n--- {name} ---")
-        print(f"Status: {status} ({ms:.1f}ms)")
-        print(json.dumps(payload, indent=2)[:400] + "...")
+if not all_passed:
+    sys.exit(1)
+print("\n=== ALL AUDIT BENCHMARKS VERIFIED SUCCESSFULLY ===")

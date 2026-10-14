@@ -9,19 +9,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=1.1" />
+  <link rel="stylesheet" href="/static/style.css?v=2.0" />
 </head>
 <body>
   <!-- Particle canvas (Datacurve constellation motion) -->
   <canvas id="dotCanvas" class="dot-canvas" aria-hidden="true"></canvas>
 
-  <!-- Announcement Bar (Portfolio Style) -->
+  <!-- Announcement Bar -->
   <div class="announcement" id="announcement">
     <div class="announcement__inner">
-      <span class="announcement__badge">OpenRouter Active</span>
+      <span class="announcement__badge">OpenRouter Nemotron Integration</span>
       <span class="announcement__model">nvidia/nemotron-3.5-lightning:free</span>
       <span class="announcement__sep">·</span>
-      <span class="announcement__sub">Synthetic Data Only (HIPAA Compliant)</span>
+      <span class="announcement__sub">Synthetic Demo Data Only (Not For Real Diagnostic Use)</span>
     </div>
   </div>
 
@@ -162,18 +162,24 @@
         <div class="results-viewer">
           <div class="tab-shelf">
             <button class="tab-link active" data-tab="tab-draft">Report Draft</button>
-            <button class="tab-link" data-tab="tab-structured">Structured JSON</button>
+            <button class="tab-link" data-tab="tab-structured">Structured JSON (Editable)</button>
             <button class="tab-link" data-tab="tab-safety">Safety &amp; Flags</button>
           </div>
 
           <div class="tab-pane active" id="tab-draft">
-            <div class="draft-typography" id="draft-output">
-              <em>Submit or click a dictation sample above to compile a structured draft report...</em>
+            <div class="viewer-toolbar">
+              <span class="toolbar-hint">Clinician-editable report draft:</span>
+              <button type="button" id="btn-copy-draft" class="btn btn--secondary btn--sm">Copy Draft</button>
             </div>
+            <textarea id="draft-output" class="textarea-clean draft-textarea" rows="8" spellcheck="true" placeholder="Submit or click a dictation sample above to compile a structured draft report..."></textarea>
           </div>
 
           <div class="tab-pane" id="tab-structured">
-            <pre class="json-typography" id="json-output">// Structured clinical findings will stream here...</pre>
+            <div class="viewer-toolbar">
+              <span class="toolbar-hint">Edit site/observation values below:</span>
+              <button type="button" id="btn-apply-json" class="btn btn--secondary btn--sm">Apply JSON Edits &amp; Update Draft</button>
+            </div>
+            <textarea id="json-output" class="textarea-clean code-textarea" rows="8" spellcheck="false" placeholder="// Structured clinical findings will stream here..."></textarea>
           </div>
 
           <div class="tab-pane" id="tab-safety">
@@ -197,6 +203,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=1.1"></script>
+  <script src="/static/app.js?v=2.0"></script>
 </body>
 </html>

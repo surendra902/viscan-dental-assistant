@@ -68,7 +68,7 @@ The **Viscan AI Dental Assistant** solves this through a **Decoupled Architectur
                    ▼                                     ▼
        ┌───────────────────────┐             ┌───────────────────────┐
        │ Synthetic Data Store  │             │ Draft Report Compiler │
-       │ 6 Patients, 9 Reports │             │ `requires_review:true`│
+       │ 6 Patients, 13 Reports│             │ `requires_review:true`│
        └───────────┬───────────┘             └───────────┬───────────┘
                    │                                     │
                    ▼                                     ▼
@@ -257,38 +257,53 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 Open **`http://localhost:8000`** in your browser.
 
 ### Automated Testing Suite
-Run all 11 unit, integration, and clinical safety tests:
+Run the unit and integration test suite:
 ```bash
-pytest -v
+pytest tests/ -v
 ```
-All tests execute deterministically with zero network flakiness.
+All tests execute deterministically with or without an API key.
 
-### End-to-End Latency Benchmark
-Run the automated live benchmark across all 14 test scenarios:
+### End-to-End Audit & Correctness Benchmark
+Run the automated live benchmark across all 16 clinical scenarios:
 ```bash
 python tests/audit_benchmark.py
+```
+To run against a remote deployment (e.g. Render):
+```bash
+TARGET_URL=https://viscan-dental-assistant.onrender.com python tests/audit_benchmark.py
 ```
 
 ---
 
-## 9. Production Considerations (PDF §3 Compliance)
+## 9. Known Limitations & Prototype Scope
+
+1. **Synthetic Demo Data Only**: Not intended or approved for real-world diagnostic use or clinical decision-making. Synthetic patient profiles have been constructed specifically to test ambiguity resolution and missing report edge cases.
+2. **In-Memory Process-Local Session Context**: Multi-turn context is managed in process memory (`SessionManager`) within a single instance. In a distributed multi-replica deployment, durable storage (e.g., Redis cluster) would be required.
+3. **Lexical & Allowlist Terminology Heuristics**: Domain validation uses curated human dental anatomy and pathology allowlists with tooth numbering bounds (Universal 1–32, FDI permanent 11–48, deciduous 51–85) and transcript lexical grounding. This is a heuristic clinical safety gate, not a medical device diagnostic engine.
+4. **Draft Report Labeling**: Dictations output `requires_review: true` to enforce human-in-the-loop sign-off. A full clinical EHR approval workflow (electronic signature, cryptographic audit trail, PACS sync) is proposed for production but out of scope for this take-home prototype.
+5. **Single-Tenant Prototype**: Authentication and role-based access control (RBAC) are documented as production requirements but omitted from this standalone proof-of-concept.
+
+---
+
+## 10. Production Considerations (PDF §3 Compliance)
 
 1. **Privacy & PHI Protection**: Zero real patient data. In production, an on-premise PII scrubber (e.g., Microsoft Presidio) would sanitize names prior to LLM extraction, and sessions would be stored in ephemeral encrypted Redis with 15-minute TTLs.
 2. **Authorization (RBAC)**: Role separation between `Radiologist` (dictation approval), `Assistant` (report lookup), and `Auditor` (read-only audit trails).
 3. **Latency Benchmarks**:
-   - In-memory retrieval: **$2\text{ms} - 25\text{ms}$**.
-   - Dictation structuring: **$<2.0\text{s}$** with instant fallback.
+   - In-memory retrieval: **15ms – 40ms** locally.
+   - Dictation structuring: **80ms – 300ms** (deterministic fallback) or **1.5s – 3.5s** (OpenRouter free-tier remote inference depending on network).
 4. **Model Economics**:
-   - Extraction via `nvidia/nemotron-3.5-lightning:free` or `gpt-4o-mini`: $\approx \$0.0003/\text{turn}$.
+   - Extraction via `nvidia/nemotron-3.5-lightning:free`: **$0.00 / turn**.
+   - Optional production fallback via `gpt-4o-mini`: $\approx \$0.0003/\text{turn}$.
    - Whisper transcription: $\approx \$0.006/\text{minute}$ ($\approx \$0.003$ per 30-second clinical dictation).
-   - Offline fallback engine: **$\$0.00$**.
-5. **Safety Defaults**: `requires_review` is hardcoded to `true` on the response model. Unverified claims (*"dragon teeth"*) trigger visual caution flags.
+   - Offline fallback engine: **$0.00**.
+5. **Safety Defaults**: `requires_review` is enforced on every dictation response. Unverified claims (*"dragon teeth"*, *"moon crystals"*) trigger visual caution flags.
 
 ---
 
-## 10. Hosting & Deployment (Render vs. Vercel)
+## 11. Hosting & Deployment (Render vs. Vercel)
 
-### Why Render is the Architecturally Superior Choice
+### Why Render is the Selected Architecture
 | Criterion | Render (Selected) | Vercel |
 | :--- | :--- | :--- |
 | **Execution Model** | **Persistent, stateful Python process** | Ephemeral, stateless Serverless Lambdas |
@@ -297,7 +312,7 @@ python tests/audit_benchmark.py
 | **Audio Uploads** | Standard streaming multipart body | 4.5 MB serverless request ceiling |
 | **Automation** | **Declarative `render.yaml` Blueprint** | Manual `vercel.json` rewrites |
 
-Because **Feature C (Conversational Follow-Up)** requires maintaining session context across turns without an external database in a prototype, **Render preserves state reliably**.
+Because **Feature C (Conversational Follow-Up)** requires maintaining session context across turns without an external database in this proof-of-concept, Render provides a persistent execution environment.
 
 ### Deploying to Render
 1. Open [dashboard.render.com](https://dashboard.render.com/) and click **New +** > **Blueprint**.
@@ -308,7 +323,7 @@ Because **Feature C (Conversational Follow-Up)** requires maintaining session co
 
 ---
 
-## 11. Project Directory Structure
+## 12. Project Directory Structure
 
 ```
 viscan-dental-assistant/
@@ -317,38 +332,38 @@ viscan-dental-assistant/
 │   ├── main.py              # FastAPI application, routes, middleware, and CORS
 │   ├── models.py            # Strict Pydantic models for request & response validation
 │   ├── data_store.py        # In-memory loader for synthetic patients and reports
-│   ├── session.py           # Multi-turn conversational session manager
+│   ├── session.py           # Multi-turn conversational session manager (with report isolation)
 │   ├── tools.py             # Deterministic tool layer (find_patient, get_latest_report)
-│   ├── validators.py        # Business validator (dental anatomy & pathology allowlists)
+│   ├── validators.py        # Business validator (dental anatomy & pathology allowlists, grounding)
 │   └── llm.py               # OpenRouter Nemotron integration + deterministic fallback
 ├── data/
 │   ├── patients.json        # 6 synthetic patients (Priya Sharma & Priya Menon pair)
-│   └── reports.json         # 9 clinical reports (OPG, CBCT, IOPA) with structured findings
+│   └── reports.json         # 13 clinical reports (OPG, CBCT, IOPA) — >=2 reports per patient
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py          # Pytest fixtures and test client setup
-│   ├── audit_benchmark.py   # Live latency benchmark across all 14 clinical scenarios
+│   ├── audit_benchmark.py   # Live correctness & latency benchmark across 16 scenarios
 │   ├── test_retrieval.py    # Test 1: Report retrieval + missing report + follow-up
 │   ├── test_ambiguity.py    # Test 2: Ambiguous patient identity handling
 │   ├── test_dictation.py    # Test 3: Unsupported clinical claims & valid dictation
-│   └── test_openrouter.py   # OpenRouter Nemotron integration and resilience tests
+│   └── test_openrouter.py   # OpenRouter Nemotron integration and offline resilience tests
 ├── docs/
 │   ├── ARCHITECTURE.md      # 1-page architecture flow document
 │   ├── DEMO.md              # Documented sequence of curl calls with verbatim outputs
 │   └── PRODUCTION_NOTES.md  # Detailed analysis of privacy, auth, latency, and costs
 ├── static/
-│   ├── index.html           # Datacurve-styled interface with one-click test clusters
+│   ├── index.html           # Datacurve-styled interface with editable JSON & draft panels
 │   ├── style.css            # Editorial stylesheet with particle canvas & 3D tilt
-│   └── app.js               # Frontend chat, dictation, and evidence inspector
+│   └── app.js               # Frontend chat, dictation, editing, and evidence inspector
 ├── render.yaml              # Render Blueprint specification
-├── requirements.txt         # Pinned production dependencies
+├── requirements.txt         # Production dependencies
 ├── .env.example             # Environment variable template
 └── README.md                # Comprehensive documentation
 ```
 
 ---
 
-## 12. Deliverables Index
+## 13. Deliverables Index
 
 - **Architecture Document**: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - **Documented API Demo Calls & Outputs**: [`docs/DEMO.md`](docs/DEMO.md)

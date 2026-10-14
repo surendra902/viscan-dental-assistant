@@ -134,5 +134,61 @@
     ],
     "impression": "Bilateral palatally impacted maxillary canines with retained primary canines.",
     "evidence_snippet": "Report R109 (OPG, 2026-03-10): Bilateral palatally impacted teeth 13 and 23, retained deciduous canines."
+  },
+  {
+    "report_id": "R110",
+    "patient_id": "P002",
+    "modality": "OPG",
+    "date": "2025-05-14T10:00:00Z",
+    "referring_doctor": "Dr. A. Varma",
+    "clinical_indication": "Baseline periodontal survey",
+    "findings": [
+      "Mild crestal bone resorption around lower molars.",
+      "Incipient interproximal radiolucency tooth 16."
+    ],
+    "impression": "Early periodontal changes; monitor tooth 16.",
+    "evidence_snippet": "Report R110 (OPG, 2025-05-14): Mild crestal bone resorption, incipient caries tooth 16."
+  },
+  {
+    "report_id": "R111",
+    "patient_id": "P004",
+    "modality": "IOPA",
+    "date": "2025-08-10T11:15:00Z",
+    "referring_doctor": "Dr. Sneha Paul",
+    "clinical_indication": "Routine post-restoration checkup tooth 21",
+    "findings": [
+      "Satisfactory composite restoration on tooth 21 with normal periapical contour.",
+      "Lamina dura intact around root apex."
+    ],
+    "impression": "Stable restoration tooth 21; normal periapical anatomy.",
+    "evidence_snippet": "Report R111 (IOPA, 2025-08-10): Intact periapical contour tooth 21."
+  },
+  {
+    "report_id": "R112",
+    "patient_id": "P005",
+    "modality": "OPG",
+    "date": "2025-04-12T14:30:00Z",
+    "referring_doctor": "Dr. Rajesh Kulkarni",
+    "clinical_indication": "General dental checkup and restoration assessment",
+    "findings": [
+      "Intact dentition with moderate proximal restoration tooth 45.",
+      "Normal alveolar bone heights bilaterally."
+    ],
+    "impression": "Baseline panoramic screening with no acute bony defect.",
+    "evidence_snippet": "Report R112 (OPG, 2025-04-12): Normal alveolar bone heights, intact restorations."
+  },
+  {
+    "report_id": "R113",
+    "patient_id": "P006",
+    "modality": "OPG",
+    "date": "2025-07-22T09:30:00Z",
+    "referring_doctor": "Dr. T. Joseph",
+    "clinical_indication": "Early mixed dentition eruption monitoring",
+    "findings": [
+      "Ectopic eruption path noted for maxillary canine tooth germs.",
+      "Normal root development of permanent central and lateral incisors."
+    ],
+    "impression": "Ectopic canine trajectory; recommend follow-up imaging.",
+    "evidence_snippet": "Report R113 (OPG, 2025-07-22): Ectopic eruption trajectory for permanent canines."
   }
 ]

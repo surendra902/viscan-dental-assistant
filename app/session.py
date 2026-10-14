@@ -24,16 +24,23 @@ class SessionManager:
         patient_id: Optional[str] = None,
         patient_name: Optional[str] = None,
         report_id: Optional[str] = None,
-        modality: Optional[str] = None
+        modality: Optional[str] = None,
+        clear_report_if_none: bool = False
     ):
         sess = self.get_or_create(session_id)
-        if patient_id:
+        if patient_id is not None:
+            # If switching to a new patient, clear prior patient's report unless a new report is provided
+            if sess.last_patient_id and sess.last_patient_id.lower() != patient_id.lower():
+                if report_id is None:
+                    sess.last_report_id = None
             sess.last_patient_id = patient_id
-        if patient_name:
+        if patient_name is not None:
             sess.last_patient_name = patient_name
-        if report_id:
+        if report_id is not None:
             sess.last_report_id = report_id
-        if modality:
+        elif clear_report_if_none:
+            sess.last_report_id = None
+        if modality is not None:
             sess.last_modality = modality
 
     def add_message(self, session_id: str, role: str, content: str):

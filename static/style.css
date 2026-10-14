@@ -696,6 +696,41 @@ body::before {
   display: block;
 }
 
+.viewer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.toolbar-hint {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--brown-500);
+}
+
+.draft-textarea,
+.code-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink);
+  resize: vertical;
+  min-height: 180px;
+}
+
+.code-textarea {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--blue-700);
+  background: #fbfaf8;
+}
+
 .draft-typography {
   font-size: 0.85rem;
   white-space: pre-wrap;

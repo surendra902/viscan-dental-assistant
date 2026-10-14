@@ -1,5 +1,5 @@
 // Viscan AI Dental Assistant — Datacurve-inspired Frontend & Motion Engine
-const sessionId = "session-" + Math.random().toString(36).substring(2, 9);
+let sessionId = "session-" + Math.random().toString(36).substring(2, 9);
 
 document.addEventListener("DOMContentLoaded", () => {
   // Elements
@@ -19,6 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const draftOutput = document.getElementById("draft-output");
   const jsonOutput = document.getElementById("json-output");
   const safetyOutput = document.getElementById("safety-output");
+  const btnApplyJson = document.getElementById("btn-apply-json");
+  const btnCopyDraft = document.getElementById("btn-copy-draft");
 
   const btnShowPatients = document.getElementById("btn-show-patients");
   const patientsModal = document.getElementById("patients-modal");
@@ -129,13 +131,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ---------- Clear Chat ---------- */
   btnClearChat.addEventListener("click", () => {
+    sessionId = "session-" + Math.random().toString(36).substring(2, 9);
     chatMessages.innerHTML = `
       <div class="message message--bot">
         <div class="message__meta">
           <span class="message__sender">Viscan Intelligence</span>
           <span class="message__time">Reset</span>
         </div>
-        <div class="message__body">Session context reset. Ready for clinical dialogue.</div>
+        <div class="message__body">Session context reset. Active patient and report memory cleared. Ready for new clinical dialogue.</div>
       </div>
     `;
     evidenceBox.style.display = "none";
@@ -221,10 +224,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
 
       // Tab 1: Draft Text
-      draftOutput.textContent = data.draft_report;
+      draftOutput.value = data.draft_report;
 
       // Tab 2: Structured JSON
-      jsonOutput.textContent = JSON.stringify({
+      jsonOutput.value = JSON.stringify({
         structured_findings: data.structured_findings,
         requires_review: data.requires_review,
         uncertainties: data.uncertainties,
@@ -269,6 +272,57 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   btnProcessDictate.addEventListener("click", processDictation);
+
+  /* ---------- Editable JSON & Draft Handlers (Requirement B) ---------- */
+  if (btnApplyJson) {
+    btnApplyJson.addEventListener("click", () => {
+      try {
+        const rawJson = jsonOutput.value.trim();
+        if (!rawJson) return;
+        const parsed = JSON.parse(rawJson);
+        const findings = Array.isArray(parsed) ? parsed : (parsed.structured_findings || []);
+        const rawDictation = dictateInput.value.trim() || "Clinician Dictation";
+
+        let draftText = "CLINICAL OBSERVATION REPORT (DRAFT - REQUIRES CLINICIAN REVIEW)\n\n";
+        draftText += `Raw Dictation: "${rawDictation}"\n\n`;
+        draftText += "Structured Observations (Clinician Edited):\n";
+        findings.forEach(f => {
+          const status = f.is_supported !== false ? "[VALIDATED]" : "[UNSUPPORTED / CAUTION]";
+          const site = f.anatomical_site || "Unspecified site";
+          const obs = f.observation || "Unspecified observation";
+          const conf = f.confidence !== undefined ? Number(f.confidence).toFixed(2) : "0.95";
+          draftText += ` - ${status} Site: ${site} | Observation: ${obs} (Confidence: ${conf})\n`;
+        });
+        draftText += "\nStatus: DRAFT - Mandatory clinician sign-off required prior to final diagnostic record.";
+
+        draftOutput.value = draftText;
+        document.querySelector(`.tab-link[data-tab="tab-draft"]`).click();
+        appendBubble("bot", "Viscan Assistant", "Structured JSON edits applied. Draft report recompiled from updated findings.");
+      } catch (err) {
+        alert("Invalid JSON format: " + err.message);
+      }
+    });
+  }
+
+  if (btnCopyDraft) {
+    btnCopyDraft.addEventListener("click", () => {
+      const text = draftOutput.value.trim();
+      if (!text) {
+        alert("Draft report is currently empty.");
+        return;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        btnCopyDraft.textContent = "Copied!";
+        setTimeout(() => { btnCopyDraft.textContent = "Copy Draft"; }, 2000);
+      }).catch(() => {
+        // Fallback copy
+        draftOutput.select();
+        document.execCommand("copy");
+        btnCopyDraft.textContent = "Copied!";
+        setTimeout(() => { btnCopyDraft.textContent = "Copy Draft"; }, 2000);
+      });
+    });
+  }
 
   /* ---------- Speech Recognition / Voice Input Handlers ---------- */
   function getSpeechRecognition() {
