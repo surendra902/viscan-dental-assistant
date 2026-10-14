@@ -366,7 +366,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const rec = new SpeechClass();
       rec.continuous = false;
-      rec.interimResults = false;
+      rec.interimResults = true;
       rec.lang = 'en-US';
       return rec;
     } catch (e) {
@@ -384,10 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (activeVoiceTarget === "chat") {
       if (activeRecognition) {
         try { activeRecognition.stop(); } catch (_) {}
-        activeRecognition = null;
       }
-      activeVoiceTarget = null;
-      btnVoiceChat.classList.remove("recording");
       return;
     }
 
@@ -411,31 +408,40 @@ document.addEventListener("DOMContentLoaded", () => {
     activeRecognition = rec;
     activeVoiceTarget = "chat";
     btnVoiceChat.classList.add("recording");
-    let hasResult = false;
+
+    let finalTranscript = "";
+    let hasSubmitted = false;
+    let hasError = false;
 
     rec.onresult = (e) => {
-      if (e.results && e.results[0] && e.results[0][0]) {
-        const transcript = e.results[0][0].transcript.trim();
-        if (transcript) {
-          hasResult = true;
-          chatInput.value = transcript;
-          chatForm.dispatchEvent(new Event("submit"));
+      let fullFinal = "";
+      let interim = "";
+      for (let i = 0; i < e.results.length; ++i) {
+        const res = e.results[i];
+        if (res.isFinal) {
+          fullFinal += res[0].transcript + " ";
+        } else {
+          interim += res[0].transcript;
         }
+      }
+      finalTranscript = fullFinal.trim();
+      const liveText = (finalTranscript + (interim ? " " + interim : "")).trim();
+      if (liveText) {
+        chatInput.value = liveText;
       }
     };
 
     rec.onerror = (e) => {
       console.warn("Voice chat recognition error:", e.error);
+      hasError = true;
       btnVoiceChat.classList.remove("recording");
       activeVoiceTarget = null;
       activeRecognition = null;
 
-      if (!hasResult) {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
-          appendBubble("bot", "Viscan Voice Assistant", `Voice input unavailable (${e.error}). Please type your query or click one of the preset example queries.`);
-        } else if (e.error === "no-speech") {
-          appendBubble("bot", "Viscan Voice Assistant", "No speech was detected. Please click the mic again or type your query.");
-        }
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
+        appendBubble("bot", "Viscan Voice Assistant", `Voice input unavailable (${e.error}). Please type your query or click one of the preset example queries.`);
+      } else if (e.error === "no-speech") {
+        appendBubble("bot", "Viscan Voice Assistant", "No speech was detected. Please click the mic again or type your query.");
       }
     };
 
@@ -444,6 +450,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (activeVoiceTarget === "chat") {
         activeVoiceTarget = null;
         activeRecognition = null;
+      }
+
+      if (hasError || hasSubmitted) return;
+
+      const query = (finalTranscript || chatInput.value).trim();
+      if (query) {
+        hasSubmitted = true;
+        chatInput.value = query;
+        chatForm.dispatchEvent(new Event("submit"));
       }
     };
 
@@ -490,29 +505,40 @@ document.addEventListener("DOMContentLoaded", () => {
     activeVoiceTarget = "dictate";
     btnRecordAudio.classList.add("recording");
     recordBtnText.textContent = "Listening...";
-    let hasResult = false;
+    let finalTranscript = "";
+    let hasSubmitted = false;
+    let hasError = false;
 
     rec.onresult = (e) => {
-      if (e.results && e.results[0] && e.results[0][0]) {
-        const transcript = e.results[0][0].transcript.trim();
-        if (transcript) {
-          hasResult = true;
-          dictateInput.value = transcript;
-          processDictation();
+      let fullFinal = "";
+      let interim = "";
+      for (let i = 0; i < e.results.length; ++i) {
+        const res = e.results[i];
+        if (res.isFinal) {
+          fullFinal += res[0].transcript + " ";
+        } else {
+          interim += res[0].transcript;
         }
+      }
+      finalTranscript = fullFinal.trim();
+      const liveText = (finalTranscript + (interim ? " " + interim : "")).trim();
+      if (liveText) {
+        dictateInput.value = liveText;
       }
     };
 
     rec.onerror = (e) => {
       console.warn("Dictation recognition error:", e.error);
+      hasError = true;
       btnRecordAudio.classList.remove("recording");
       recordBtnText.textContent = "Voice Dictation";
       activeVoiceTarget = null;
       activeRecognition = null;
 
-      if (!hasResult) {
-        // Safe failure: preserve current input and draft, do NOT overwrite or auto-submit clinical text
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
         appendBubble("bot", "Viscan Assistant", `Voice input unavailable (${e.error}). Existing transcript preserved; please type or paste your observations, or click an example preset.`);
+      } else if (e.error === "no-speech") {
+        appendBubble("bot", "Viscan Assistant", "No speech was detected. Please click the mic again or type your dictation.");
       }
     };
 
@@ -522,6 +548,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (activeVoiceTarget === "dictate") {
         activeVoiceTarget = null;
         activeRecognition = null;
+      }
+
+      if (hasError || hasSubmitted) return;
+
+      const text = (finalTranscript || dictateInput.value).trim();
+      if (text) {
+        hasSubmitted = true;
+        dictateInput.value = text;
+        processDictation();
       }
     };
 
