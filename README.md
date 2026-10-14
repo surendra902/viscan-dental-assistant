@@ -133,7 +133,7 @@ Free-tier shared LLM endpoints can experience network queues. To guarantee sub-s
 
 ## 5. User Interface (Datacurve-Inspired Editorial Design)
 
-The interactive web interface is styled using the editorial motion system from the candidate's portfolio:
+The interactive web interface is styled using the editorial motion system:
 - **Typography**: *Instrument Serif* for luxury clinical headers, *Inter* for draft readability, and *JetBrains Mono* for technical schema tags.
 - **Visual Depth**: Fractal noise grain overlay with a dynamic background particle canvas (`#dotCanvas`).
 - **Interactive Micro-Animations**: 3D perspective tilt (`[data-tilt]`) on workspace cards with smooth cubic-bezier transitions.
