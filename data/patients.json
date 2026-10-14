@@ -1,0 +1,44 @@
+[
+  {
+    "patient_id": "P001",
+    "name": "Priya Sharma",
+    "date_of_birth": "1997-04-12",
+    "gender": "Female",
+    "contact": "+91-98765-01001"
+  },
+  {
+    "patient_id": "P002",
+    "name": "Priya Menon",
+    "date_of_birth": "1992-09-18",
+    "gender": "Female",
+    "contact": "+91-98765-01002"
+  },
+  {
+    "patient_id": "P003",
+    "name": "Arjun Patel",
+    "date_of_birth": "1981-01-22",
+    "gender": "Male",
+    "contact": "+91-98765-01003"
+  },
+  {
+    "patient_id": "P004",
+    "name": "Sara Khan",
+    "date_of_birth": "2004-11-05",
+    "gender": "Female",
+    "contact": "+91-98765-01004"
+  },
+  {
+    "patient_id": "P005",
+    "name": "Vikram Desai",
+    "date_of_birth": "1973-07-30",
+    "gender": "Male",
+    "contact": "+91-98765-01005"
+  },
+  {
+    "patient_id": "P006",
+    "name": "Ananya Rao",
+    "date_of_birth": "1995-03-14",
+    "gender": "Female",
+    "contact": "+91-98765-01006"
+  }
+]

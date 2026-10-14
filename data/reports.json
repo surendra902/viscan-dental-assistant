@@ -1,0 +1,138 @@
+[
+  {
+    "report_id": "R101",
+    "patient_id": "P001",
+    "modality": "OPG",
+    "date": "2026-01-15T10:30:00Z",
+    "referring_doctor": "Dr. Rajesh Kulkarni",
+    "clinical_indication": "Evaluation of recurrent pain in lower right posterior quadrant",
+    "findings": [
+      "Lower right third molar (tooth 48) is horizontally impacted with crown approximating the distal root of tooth 47.",
+      "Mild periapical radiolucency associated with the mesial root apex of tooth 36, suggestive of chronic apical periodontitis.",
+      "Alveolar bone crest levels are generally within normal limits across both arches.",
+      "Bilateral temporomandibular joints appear symmetrical with normal condylar morphology."
+    ],
+    "impression": "1. Horizontally impacted tooth 48 requiring surgical evaluation. 2. Chronic periapical lesion on tooth 36.",
+    "evidence_snippet": "Report R101 (OPG, 2026-01-15): Horizontally impacted tooth 48; periapical radiolucency tooth 36."
+  },
+  {
+    "report_id": "R102",
+    "patient_id": "P001",
+    "modality": "OPG",
+    "date": "2025-06-10T09:15:00Z",
+    "referring_doctor": "Dr. Rajesh Kulkarni",
+    "clinical_indication": "Routine baseline orthodontic screening",
+    "findings": [
+      "Developing lower right third molar (tooth 48) with mesioangular inclination.",
+      "No evident periapical radiolucency or gross caries noted on visualized dentition.",
+      "Normal trabecular bone pattern throughout maxilla and mandible."
+    ],
+    "impression": "Developing third molars without active pathology.",
+    "evidence_snippet": "Report R102 (OPG, 2025-06-10): Developing mesioangular tooth 48, no periapical pathology."
+  },
+  {
+    "report_id": "R103",
+    "patient_id": "P001",
+    "modality": "CBCT",
+    "date": "2026-02-01T14:00:00Z",
+    "referring_doctor": "Dr. Sunita Rao (Oral Surgeon)",
+    "clinical_indication": "Pre-surgical 3D assessment of tooth 48 and relation to inferior alveolar nerve",
+    "findings": [
+      "Tooth 48 roots are in intimate direct contact with the superior cortical border of the right inferior alveolar nerve (IAN) canal.",
+      "Cortical thinning and localized breach noted on the lingual cortical plate adjacent to the crown of tooth 48.",
+      "No cystic expansion or external root resorption of tooth 47 identified."
+    ],
+    "impression": "High risk of IAN proximity for tooth 48 extraction; lingual cortex fenestration.",
+    "evidence_snippet": "Report R103 (CBCT, 2026-02-01): Intimate contact between tooth 48 roots and inferior alveolar nerve canal."
+  },
+  {
+    "report_id": "R104",
+    "patient_id": "P002",
+    "modality": "OPG",
+    "date": "2026-03-02T11:20:00Z",
+    "referring_doctor": "Dr. A. Varma",
+    "clinical_indication": "Full mouth periodontal evaluation and bleeding gums",
+    "findings": [
+      "Generalized moderate horizontal alveolar bone loss consistent with chronic generalized periodontitis.",
+      "Deep occlusal radiolucency involving enamel and dentin on tooth 16 approaching pulp chamber.",
+      "Calculus deposition visible on lingual surfaces of mandibular anterior teeth."
+    ],
+    "impression": "Moderate generalized periodontitis; deep dentinal caries tooth 16.",
+    "evidence_snippet": "Report R104 (OPG, 2026-03-02): Generalized moderate horizontal bone loss; caries tooth 16."
+  },
+  {
+    "report_id": "R105",
+    "patient_id": "P003",
+    "modality": "OPG",
+    "date": "2025-11-12T16:45:00Z",
+    "referring_doctor": "Dr. Meera Nambiar",
+    "clinical_indication": "Swelling in left lower jaw",
+    "findings": [
+      "Well-circumscribed unilocular radiolucency in left posterior mandible extending from distal of tooth 37 into ascending ramus.",
+      "Teeth 24 and 25 are clinically missing.",
+      "Mild root divergence of adjacent teeth without root resorption."
+    ],
+    "impression": "Unilocular radiolucent lesion left mandible, differential includes odontogenic keratocyst or ameloblastoma.",
+    "evidence_snippet": "Report R105 (OPG, 2025-11-12): Well-circumscribed unilocular radiolucency left posterior mandible."
+  },
+  {
+    "report_id": "R106",
+    "patient_id": "P003",
+    "modality": "CBCT",
+    "date": "2025-12-05T10:00:00Z",
+    "referring_doctor": "Dr. Meera Nambiar",
+    "clinical_indication": "Volumetric evaluation of left mandibular osteolytic lesion",
+    "findings": [
+      "Expansile radiolucent lesion in left mandibular body measuring 18 x 12 x 15 mm.",
+      "Buccal cortical expansion with localized perforation of the lingual cortical plate.",
+      "Inferior alveolar nerve canal displaced inferiorly."
+    ],
+    "impression": "Expansile osteolytic lesion left mandible with cortical perforation.",
+    "evidence_snippet": "Report R106 (CBCT, 2025-12-05): 18x12x15mm expansile lesion left mandible with lingual perforation."
+  },
+  {
+    "report_id": "R107",
+    "patient_id": "P004",
+    "modality": "IOPA",
+    "date": "2026-02-20T15:30:00Z",
+    "referring_doctor": "Dr. Sneha Paul",
+    "clinical_indication": "Dental trauma to upper anterior incisors",
+    "findings": [
+      "Widened periodontal ligament space at the periapical region of tooth 11.",
+      "No root fracture or alveolar bone fracture detected.",
+      "Pulp chamber is intact without signs of obliteration."
+    ],
+    "impression": "Subluxation injury of tooth 11 with periapical ligament widening.",
+    "evidence_snippet": "Report R107 (IOPA, 2026-02-20): Widened periodontal ligament space tooth 11 post-trauma."
+  },
+  {
+    "report_id": "R108",
+    "patient_id": "P005",
+    "modality": "OPG",
+    "date": "2026-01-28T12:00:00Z",
+    "referring_doctor": "Dr. Rajesh Kulkarni",
+    "clinical_indication": "Food impaction and localized pain right posterior mandible",
+    "findings": [
+      "Severe vertical angular bone defect at the mesial aspect of tooth 46.",
+      "Overhanging defective composite restoration on tooth 45.",
+      "Mild generalized horizontal bone loss."
+    ],
+    "impression": "Localized vertical periodontal defect tooth 46 secondary to overhanging restoration on tooth 45.",
+    "evidence_snippet": "Report R108 (OPG, 2026-01-28): Severe vertical bone defect mesial of tooth 46, defective restoration tooth 45."
+  },
+  {
+    "report_id": "R109",
+    "patient_id": "P006",
+    "modality": "OPG",
+    "date": "2026-03-10T09:40:00Z",
+    "referring_doctor": "Dr. T. Joseph",
+    "clinical_indication": "Pre-orthodontic evaluation for retained deciduous canines",
+    "findings": [
+      "Bilateral upper maxillary permanent canines (teeth 13 and 23) are palatally impacted.",
+      "Retained deciduous canines 53 and 63.",
+      "No evidence of root resorption on adjacent lateral incisors 12 and 22."
+    ],
+    "impression": "Bilateral palatally impacted maxillary canines with retained primary canines.",
+    "evidence_snippet": "Report R109 (OPG, 2026-03-10): Bilateral palatally impacted teeth 13 and 23, retained deciduous canines."
+  }
+]

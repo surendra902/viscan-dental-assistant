@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8f6f2" />
+  <title>Viscan AI Dental Assistant — Clinical Intelligence</title>
+  <meta name="description" content="Voice-first clinical dental radiology assistant powered by OpenRouter Nemotron for intelligent report retrieval, dictation structuring, and evidence grounding." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Particle canvas (Datacurve constellation motion) -->
+  <canvas id="dotCanvas" class="dot-canvas" aria-hidden="true"></canvas>
+
+  <!-- Announcement Bar (Portfolio Style) -->
+  <div class="announcement" id="announcement">
+    <div class="announcement__inner">
+      <span class="announcement__badge">OpenRouter Active</span>
+      <span class="announcement__model">nvidia/nemotron-3.5-lightning:free</span>
+      <span class="announcement__sep">·</span>
+      <span class="announcement__sub">Synthetic Data Only (HIPAA Compliant)</span>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <!-- Header (Portfolio Datacurve-style) -->
+    <header class="site-header" id="header">
+      <div class="header__inner">
+        <div class="header__brand">
+          <a href="#" class="logo">Viscan<span>.</span></a>
+          <span class="brand-divider">/</span>
+          <span class="brand-tagline">Clinical Radiology &amp; Dictation Assistant</span>
+        </div>
+        <div class="header__controls">
+          <div class="model-pill">
+            <span class="pulse-indicator"></span>
+            <span class="model-name">Nemotron 3.5</span>
+          </div>
+          <button id="btn-show-patients" class="btn btn--secondary btn--sm">Patient Directory (6)</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="workspace-grid">
+      <!-- Left Panel: Dialogue & Retrieval (Feature A & C) -->
+      <section class="card panel-chat" data-tilt aria-labelledby="chat-title">
+        <div class="card__header">
+          <div class="title-cluster">
+            <span class="eyebrow">MODULE 01</span>
+            <h2 id="chat-title" class="display-card">Report Retrieval &amp; Dialogue</h2>
+          </div>
+          <button id="btn-clear-chat" class="btn-icon" title="Reset Session State">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-group">
+          <span class="preset-label">TEST CLUSTERS:</span>
+          <div class="chip-row">
+            <button class="chip" data-msg="Open Priya Sharma's latest OPG report">Priya Sharma OPG (Pass)</button>
+            <button class="chip chip--amber" data-msg="Open Priya's latest OPG report">Priya (Ambiguous)</button>
+            <button class="chip chip--blue" data-msg="Summarize her report">Summarize Follow-up</button>
+            <button class="chip chip--subtle" data-msg="Open Sara Khan's latest CBCT report">Sara CBCT (Missing)</button>
+          </div>
+        </div>
+
+        <!-- Message Stream -->
+        <div class="chat-viewport" id="chat-messages" role="log" aria-live="polite">
+          <div class="message message--bot">
+            <div class="message__meta">
+              <span class="message__sender">Viscan Intelligence</span>
+              <span class="message__time">Ready</span>
+            </div>
+            <div class="message__body">
+              Good day, Doctor. Speak or type your request (e.g. <em>"Open Priya Sharma's latest OPG report"</em>), or ask context-dependent follow-up queries like <em>"Summarize her report"</em>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Input Bar -->
+        <form class="chat-form" id="chat-form">
+          <input
+            type="text"
+            id="chat-input"
+            class="input-clean"
+            placeholder="Ask: 'Open Priya Sharma's latest OPG report'..."
+            autocomplete="off"
+            required
+          />
+          <button type="button" id="btn-voice-chat" class="btn-mic" title="Voice Input">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+          <button type="submit" id="btn-send-chat" class="btn btn--primary">Query</button>
+        </form>
+
+        <!-- Auditable Grounding Card -->
+        <div class="evidence-shelf" id="evidence-container" style="display: none;">
+          <div class="evidence-shelf__header">
+            <span class="evidence-shelf__title">Auditable Grounding Reference</span>
+            <span class="evidence-shelf__badge" id="evidence-source-tag">Source Report</span>
+          </div>
+          <div class="evidence-shelf__content" id="evidence-body"></div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Clinical Dictation (Feature B) -->
+      <section class="card panel-dictate" data-tilt aria-labelledby="dictate-title">
+        <div class="card__header">
+          <div class="title-cluster">
+            <span class="eyebrow">MODULE 02</span>
+            <h2 id="dictate-title" class="display-card">Clinical Dictation to Report Draft</h2>
+          </div>
+          <div class="compliance-badge">
+            <span class="pulse-indicator pulse--amber"></span>
+            <span>Mandatory Clinician Review</span>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-group">
+          <span class="preset-label">DICTATION SAMPLES:</span>
+          <div class="chip-row">
+            <button class="chip chip--green" data-dict="Lower right third molar is horizontally impacted">Valid: Third Molar Impaction</button>
+            <button class="chip chip--red" data-dict="Patient has dragon teeth with quantum decay">Adversarial: Dragon Teeth</button>
+            <button class="chip chip--blue" data-dict="Deep occlusal caries on tooth 16 and generalized moderate horizontal bone loss">Complex: Multi-Site Pathology</button>
+          </div>
+        </div>
+
+        <!-- Dictation Box -->
+        <div class="dictation-shelf">
+          <textarea
+            id="dictate-input"
+            class="textarea-clean"
+            rows="3"
+            placeholder="Speak or paste clinical observations e.g. 'Lower right third molar is horizontally impacted'..."
+          ></textarea>
+          <div class="dictation-toolbar">
+            <button id="btn-record-audio" class="btn btn--secondary btn--sm">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              </svg>
+              <span id="record-btn-text">Voice Dictation</span>
+            </button>
+            <button id="btn-process-dictate" class="btn btn--primary btn--sm">Process &amp; Structure Draft</button>
+          </div>
+        </div>
+
+        <!-- Results Display with Tabs -->
+        <div class="results-viewer">
+          <div class="tab-shelf">
+            <button class="tab-link active" data-tab="tab-draft">Report Draft</button>
+            <button class="tab-link" data-tab="tab-structured">Structured JSON</button>
+            <button class="tab-link" data-tab="tab-safety">Safety &amp; Flags</button>
+          </div>
+
+          <div class="tab-pane active" id="tab-draft">
+            <div class="draft-typography" id="draft-output">
+              <em>Submit or click a dictation sample above to compile a structured draft report...</em>
+            </div>
+          </div>
+
+          <div class="tab-pane" id="tab-structured">
+            <pre class="json-typography" id="json-output">// Structured clinical findings will stream here...</pre>
+          </div>
+
+          <div class="tab-pane" id="tab-safety">
+            <div class="safety-typography" id="safety-output">
+              <p class="text-subtle">Domain validator actively monitors observations against human dental anatomical allowlists.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Synthetic Patient Directory Modal -->
+    <div class="modal-backdrop" id="patients-modal" style="display: none;">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3 class="display-modal">Synthetic Patient Directory</h3>
+          <button id="btn-close-modal" class="btn-icon">&times;</button>
+        </div>
+        <div class="modal-content" id="modal-patient-list">Loading patient records...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

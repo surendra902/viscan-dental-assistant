@@ -1,0 +1,9 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+pytest>=8.0.0
+httpx>=0.27.0
+# Optional providers (app operates fully in deterministic offline mode if keys absent)
+openai>=1.20.0
+anthropic>=0.20.0
