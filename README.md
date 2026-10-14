@@ -52,9 +52,9 @@ The **Viscan AI Dental Assistant** solves this through a **Decoupled Architectur
                    │                                     │
                    ▼                                     ▼
        ┌───────────────────────┐             ┌───────────────────────┐
-       │   LLM Parsing Layer   │             │ Candidate Extraction  │
-       │ OpenRouter Nemotron   │             │ OpenRouter Nemotron   │
-       │ (2.0s Strict Failover)│             │ (2.0s Strict Failover)│
+       │  Deterministic Parser │             │ Candidate Extraction  │
+       │ (Slot / Patient Entity│             │ OpenRouter Nemotron / │
+       │  Explicit Name First) │             │ Local Robust Fallback │
        └───────────┬───────────┘             └───────────┬───────────┘
                    │ Intent, Slots                       │ Raw Candidates
                    ▼                                     ▼
@@ -104,13 +104,15 @@ The **Viscan AI Dental Assistant** solves this through a **Decoupled Architectur
      - Claim is added to `unsupported_claims`.
      - High-visibility `WARNING` banners are appended to the draft text.
 3. **Uncertainty Tagging**: Hedged language (*"suggestive of"*, *"cannot rule out"*, *"possible"*) is detected and flagged in `uncertainties` with clinician verification advisories.
-4. **Mandatory Sign-off Guarantee**: The schema hardcodes `requires_review: true`. No AI-generated draft can bypass clinician sign-off.
+4. **Draft Status Labeling**: The schema explicitly tags every output with `requires_review: true`, ensuring downstream systems treat the generated findings as an unconfirmed draft requiring clinician sign-off.
 
 ### Module 03: Conversational Multi-Turn Follow-Up (Feature C)
 1. **State Tracking (`app/session.py`)**: An in-memory `SessionManager` tracks `last_patient_id`, `last_patient_name`, and `last_report_id` keyed by `session_id`.
-2. **Pronoun Resolution**: When a clinician asks *"Summarize her report"* or *"What were the findings?"*, the system detects the pronoun reference and checks active session context:
-   - If an unambiguous patient was retrieved in Turn 1, Turn 2 resolves directly to that patient without re-prompting.
-   - If no patient is active, it returns `status: "ambiguous"` requesting the patient's name.
+2. **Explicit Name Priority & Pronoun Resolution**:
+   - If an explicit patient name is supplied (e.g. *"Summarize Sara Khan's report"*), the assistant resolves that patient directly without inheriting previous patient context.
+   - When a clinician uses pronouns (*"Summarize her report"* or *"What were the findings?"*), the system checks active session context:
+     - If an unambiguous patient was retrieved in Turn 1, Turn 2 resolves directly to that patient without re-prompting.
+     - If no patient is active, it returns `status: "ambiguous"` requesting the patient's name.
 3. **Evidence Linkage**: The generated summary includes explicit references to the source report ID and date.
 
 ---
@@ -122,12 +124,12 @@ The **Viscan AI Dental Assistant** solves this through a **Decoupled Architectur
 - **Base URL**: `https://openrouter.ai/api/v1`
 - **Role**: Structured entity extraction and intent parsing at zero inference cost.
 
-### Strict Low-Latency Failover Architecture
-Free-tier shared LLM endpoints can experience network queues. To guarantee sub-second clinical SLAs:
-1. The OpenRouter HTTP client is initialized with a **strict 2.0-second timeout** (`httpx.Timeout(2.0, connect=2.0)`) and `max_retries=0`.
-2. If OpenRouter responds within 2 seconds, the LLM-parsed structured entities are utilized.
-3. If OpenRouter times out or errors, the system **instantly fails over to the local deterministic clinical parser in $<0.1\text{ms}$**.
-4. The clinician receives valid structured results with zero downtime and zero server hangs.
+### Resilient Local Failover Architecture
+Free-tier shared LLM endpoints can experience occasional network latency, cold starts, or rate limits. To ensure predictable clinician workflows:
+1. The OpenRouter HTTP client is initialized with a **2.0-second timeout** (`httpx.Timeout(2.0, connect=2.0)`) and `max_retries=0`.
+2. If OpenRouter responds within the timeout, the LLM-extracted candidate findings are utilized.
+3. If OpenRouter times out or encounters network/provider errors, the system **fails over to the deterministic clinical parser**.
+4. The clinician receives consistent structured findings and draft outputs even under provider degradation or total offline operation.
 
 ---
 
@@ -156,7 +158,7 @@ All records are 100% synthetic to comply with healthcare privacy standards (HIPA
 | **P006** | **Ananya Rao** | Female | 1995-03-14 | Bilateral palatally impacted maxillary canines |
 
 ### Synthetic Reports ([`data/reports.json`](data/reports.json))
-Includes **9 imaging reports** across `OPG`, `CBCT`, and `IOPA` modalities with structured clinical findings, impressions, referring doctors, and auditable evidence snippets.
+Includes **13 imaging reports** across 6 patients (counts: Priya Sharma 3, Priya Menon 2, Arjun Patel 2, Sara Khan 2, Vikram Desai 2, Ananya Rao 2) across `OPG`, `CBCT`, and `IOPA` modalities with structured clinical findings, impressions, referring doctors, and auditable evidence snippets.
 
 ---
 
@@ -243,7 +245,7 @@ python -m venv venv
 # Linux/macOS:
 source venv/bin/activate
 
-# 3. Install pinned dependencies
+# 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Configure environment (optional — engine runs fully offline if omitted)

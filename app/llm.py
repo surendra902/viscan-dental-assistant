@@ -45,6 +45,31 @@ class LLMEngine:
             except Exception as e:
                 self.client = None
 
+    def _detect_explicit_patient_name(self, text: str) -> Optional[str]:
+        """
+        Extracts an explicitly named patient candidate from the query.
+        Returns the candidate string if an explicit person or ID is named,
+        or None if the query uses pronouns/anaphora or contains no explicit patient name.
+        """
+        PRONOUNS_AND_NON_NAMES = {
+            "her", "his", "their", "the", "its", "this", "that", "these", "those",
+            "my", "our", "him", "them", "report", "the report", "findings",
+            "what were the findings", "what did her", "what did his", "it",
+            "she", "he", "they", "summarize", "summary", "please", "can", "you",
+            "could", "open", "show", "get", "find", "view"
+        }
+        extracted = self._extract_patient_name(text)
+        if not extracted:
+            return None
+        cand_lower = extracted.strip().lower()
+        if cand_lower in PRONOUNS_AND_NON_NAMES:
+            return None
+        tokens = cand_lower.split()
+        sub_tokens = [tok for tok in tokens if tok not in PRONOUNS_AND_NON_NAMES]
+        if not sub_tokens:
+            return None
+        return extracted
+
     def process_chat(self, message: str, session: SessionState) -> Dict[str, Any]:
         """
         Processes conversational messages:
@@ -54,32 +79,13 @@ class LLMEngine:
         msg_clean = message.strip()
         msg_lower = msg_clean.lower()
 
-        # If OpenRouter client is configured, call completions to parse/log dialogue
-        if self.client:
-            try:
-                self.client.chat.completions.create(
-                    model=self.openrouter_model,
-                    messages=[
-                        {"role": "system", "content": "You are a clinical dental dialogue parser. Extract patient, modality, and intent."},
-                        {"role": "user", "content": message}
-                    ],
-                    temperature=0
-                )
-            except Exception:
-                # Deterministic tool execution continues as robust fallback
-                pass
-
-        # Check for pronoun / follow-up reference (Intent C)
-        pronoun_triggers = [
-            "summarize her", "summarize his", "summarize their", "summarize the report",
-            "summarize report", "what did her", "what did his", "what were the findings",
-            "tell me about her", "tell me about his", "summary of her", "summary of his",
-            "summarize"
-        ]
-        is_follow_up = any(trigger in msg_lower for trigger in pronoun_triggers) and not any(k in msg_lower for k in ["open", "show", "get", "find", "pull up"])
-
-        # Disambiguation selection check (e.g. "Priya Sharma", "P001", "Priya Menon", or direct patient name)
-        if not is_follow_up and ("sharma" in msg_lower or "menon" in msg_lower or re.match(r"^p00[1-6]$", msg_lower) or msg_clean in ["Priya Sharma", "Priya Menon"]):
+        # 1. Disambiguation selection check (e.g. user replies "Priya Sharma", "P001", "Priya Menon")
+        is_direct_disambiguation = (
+            re.match(r"^p00[1-6]$", msg_lower) or
+            msg_clean in ["Priya Sharma", "Priya Menon"] or
+            re.match(r"^(priya\s+sharma|priya\s+menon)$", msg_lower)
+        )
+        if is_direct_disambiguation:
             direct_matches = find_patient(msg_clean)
             tool_calls_record.append({
                 "tool": "find_patient",
@@ -113,8 +119,140 @@ class LLMEngine:
                     "tool_calls": tool_calls_record
                 }
 
-        # Follow-up intent (Feature C)
-        if is_follow_up:
+        # 2. Check for explicit patient name vs pronoun reference
+        explicit_patient = self._detect_explicit_patient_name(msg_clean)
+        is_summary_request = any(k in msg_lower for k in [
+            "summarize", "summary", "what did", "what were the findings", "tell me about"
+        ])
+
+        # Feature A/B: If an explicit patient name was specified, resolve that patient directly
+        if explicit_patient:
+            modality = None
+            for m in ["OPG", "CBCT", "IOPA"]:
+                if re.search(rf"\b{m}\b", msg_clean, re.IGNORECASE):
+                    modality = m
+                    break
+
+            patients = find_patient(explicit_patient)
+            tool_calls_record.append({
+                "tool": "find_patient",
+                "arguments": {"name": explicit_patient},
+                "result_count": len(patients)
+            })
+
+            if len(patients) == 0:
+                return {
+                    "intent": "retrieve_report" if not is_summary_request else "follow_up_summary",
+                    "status": "not_found",
+                    "response_text": f"Patient '{explicit_patient}' not found in records. Please verify the name or patient ID.",
+                    "tool_calls": tool_calls_record
+                }
+
+            if len(patients) > 1:
+                session_manager.update_context(session.session_id, modality=modality)
+                candidate_names = [f"{p.name} (ID: {p.patient_id})" for p in patients]
+                resp_text = (
+                    f"Multiple patients found matching '{explicit_patient}': {', '.join(candidate_names)}. "
+                    f"Please specify the exact full name or patient ID to proceed."
+                )
+                return {
+                    "intent": "retrieve_report" if not is_summary_request else "follow_up_summary",
+                    "status": "ambiguous",
+                    "response_text": resp_text,
+                    "candidates": patients,
+                    "tool_calls": tool_calls_record
+                }
+
+            # Exactly 1 unambiguous match
+            patient = patients[0]
+            tool_calls_record.append({
+                "tool": "get_latest_report",
+                "arguments": {"patient_id": patient.patient_id, "modality": modality}
+            })
+            report = get_latest_report(patient.patient_id, modality)
+
+            if not report:
+                session_manager.update_context(
+                    session.session_id,
+                    patient_id=patient.patient_id,
+                    patient_name=patient.name,
+                    report_id=None,
+                    clear_report_if_none=True,
+                    modality=modality
+                )
+                resp_text = (
+                    f"Found patient {patient.name} ({patient.patient_id}), but no "
+                    f"{modality if modality else ''} report was found in records"
+                    f"{' to summarize' if is_summary_request else ''}."
+                )
+                return {
+                    "intent": "retrieve_report" if not is_summary_request else "follow_up_summary",
+                    "status": "not_found",
+                    "response_text": resp_text,
+                    "patient": patient,
+                    "report": None,
+                    "evidence": None,
+                    "tool_calls": tool_calls_record
+                }
+
+            session_manager.update_context(
+                session.session_id,
+                patient_id=patient.patient_id,
+                patient_name=patient.name,
+                report_id=report.report_id,
+                modality=modality or report.modality
+            )
+
+            tool_calls_record.append({"tool": "get_report_evidence", "arguments": {"report_id": report.report_id}})
+            evidence = get_report_evidence(report)
+
+            if is_summary_request:
+                summary_lines = [
+                    f"Summary for {patient.name} ({report.modality} dated {report.date[:10]}):",
+                    f"- Clinical Indication: {report.clinical_indication}",
+                    "- Key Findings:"
+                ]
+                for f in report.findings:
+                    summary_lines.append(f"  * {f}")
+                summary_lines.append(f"- Diagnostic Impression: {report.impression}")
+
+                return {
+                    "intent": "follow_up_summary",
+                    "status": "success",
+                    "response_text": "\n".join(summary_lines),
+                    "patient": patient,
+                    "report": report,
+                    "evidence": evidence,
+                    "tool_calls": tool_calls_record
+                }
+            else:
+                findings_bullets = "\n".join([f"  • {f}" for f in report.findings])
+                resp_text = (
+                    f"Retrieved {report.modality} report for {patient.name} ({patient.patient_id}) dated {report.date[:10]}:\n"
+                    f"Referring Doctor: {report.referring_doctor}\n"
+                    f"Findings:\n{findings_bullets}\n"
+                    f"Impression: {report.impression}"
+                )
+                return {
+                    "intent": "retrieve_report",
+                    "status": "success",
+                    "response_text": resp_text,
+                    "patient": patient,
+                    "report": report,
+                    "evidence": evidence,
+                    "tool_calls": tool_calls_record
+                }
+
+        # 3. Follow-up intent (Feature C) using pronoun or contextual session reference
+        pronoun_triggers = [
+            "summarize her", "summarize his", "summarize their", "summarize the report",
+            "summarize report", "what did her", "what did his", "what were the findings",
+            "tell me about her", "tell me about his", "summary of her", "summary of his",
+            "summarize", "summary"
+        ]
+        is_pronoun_follow_up = is_summary_request or any(trigger in msg_lower for trigger in pronoun_triggers)
+
+        if is_pronoun_follow_up:
             if not session.last_patient_id:
                 return {
                     "intent": "follow_up_summary",
@@ -160,7 +298,6 @@ class LLMEngine:
             tool_calls_record.append({"tool": "get_report_evidence", "arguments": {"report_id": rep.report_id}})
             evidence = get_report_evidence(rep)
 
-            # Generate grounded summary
             summary_lines = [
                 f"Summary for {pat.name} ({rep.modality} dated {rep.date[:10]}):",
                 f"- Clinical Indication: {rep.clinical_indication}",
@@ -180,103 +317,11 @@ class LLMEngine:
                 "tool_calls": tool_calls_record
             }
 
-        # Feature A: Report Retrieval Intent
-        modality = None
-        for m in ["OPG", "CBCT", "IOPA"]:
-            if re.search(rf"\b{m}\b", msg_clean, re.IGNORECASE):
-                modality = m
-                break
-
-        patient_name_query = self._extract_patient_name(msg_clean)
-
-        # Call find_patient tool
-        patients = find_patient(patient_name_query)
-        tool_calls_record.append({
-            "tool": "find_patient",
-            "arguments": {"name": patient_name_query},
-            "result_count": len(patients)
-        })
-
-        if len(patients) == 0:
-            return {
-                "intent": "retrieve_report",
-                "status": "not_found",
-                "response_text": f"Patient '{patient_name_query}' not found in records. Please verify the name or patient ID.",
-                "tool_calls": tool_calls_record
-            }
-
-        if len(patients) > 1:
-            # Preserve requested modality during ambiguity so resolution preserves it
-            session_manager.update_context(session.session_id, modality=modality)
-            candidate_names = [f"{p.name} (ID: {p.patient_id})" for p in patients]
-            resp_text = (
-                f"Multiple patients found matching '{patient_name_query}': {', '.join(candidate_names)}. "
-                f"Please specify the exact full name or patient ID to proceed."
-            )
-            return {
-                "intent": "retrieve_report",
-                "status": "ambiguous",
-                "response_text": resp_text,
-                "candidates": patients,
-                "tool_calls": tool_calls_record
-            }
-
-        # Exactly 1 unambiguous match
-        patient = patients[0]
-        tool_calls_record.append({
-            "tool": "get_latest_report",
-            "arguments": {"patient_id": patient.patient_id, "modality": modality}
-        })
-        report = get_latest_report(patient.patient_id, modality)
-
-        if not report:
-            # Clear previous report ID so follow-up never inherits another patient's report
-            session_manager.update_context(
-                session.session_id,
-                patient_id=patient.patient_id,
-                patient_name=patient.name,
-                report_id=None,
-                clear_report_if_none=True,
-                modality=modality
-            )
-            resp_text = (
-                f"Found patient {patient.name} ({patient.patient_id}), but no "
-                f"{modality if modality else ''} report was found in records."
-            )
-            return {
-                "intent": "retrieve_report",
-                "status": "not_found",
-                "response_text": resp_text,
-                "patient": patient,
-                "report": None,
-                "evidence": None,
-                "tool_calls": tool_calls_record
-            }
-
-        session_manager.update_context(
-            session.session_id,
-            patient_id=patient.patient_id,
-            patient_name=patient.name,
-            report_id=report.report_id,
-            modality=modality or report.modality
-        )
-
-        evidence = get_report_evidence(report)
-        findings_bullets = "\n".join([f"  • {f}" for f in report.findings])
-        resp_text = (
-            f"Retrieved {report.modality} report for {patient.name} ({patient.patient_id}) dated {report.date[:10]}:\n"
-            f"Referring Doctor: {report.referring_doctor}\n"
-            f"Findings:\n{findings_bullets}\n"
-            f"Impression: {report.impression}"
-        )
-
+        # Fallback for general unparsed requests
         return {
-            "intent": "retrieve_report",
-            "status": "success",
-            "response_text": resp_text,
-            "patient": patient,
-            "report": report,
-            "evidence": evidence,
+            "intent": "unknown",
+            "status": "ambiguous",
+            "response_text": "Please specify a patient name and report type, for example: \"Open Priya Sharma's latest OPG report\" or \"Summarize her report\".",
             "tool_calls": tool_calls_record
         }
 
@@ -319,7 +364,7 @@ class LLMEngine:
                 return candidate
 
         # 3. Strip query verbs & conversational wrappers
-        t = re.sub(r"^(could\s+you\s+(?:please\s+)?|can\s+you\s+(?:please\s+)?|please\s+|i\s+would\s+like\s+to\s+)?(open|show|get|find|pull\s+up|retrieve|view|display)\s+", "", t_clean, flags=re.IGNORECASE).strip()
+        t = re.sub(r"^(could\s+you\s+(?:please\s+)?|can\s+you\s+(?:please\s+)?|please\s+|i\s+would\s+like\s+to\s+)?(open|show|get|find|pull\s+up|retrieve|view|display|summarize)\s+", "", t_clean, flags=re.IGNORECASE).strip()
         t = re.sub(r"('s|’s)\s+(latest|most recent|recent)?\s*(opg|cbct|iopa)?\s*(report|scan|image|record)?.*$", "", t, flags=re.IGNORECASE).strip()
         t = re.sub(r"\s+(latest|most recent|recent)?\s*(opg|cbct|iopa)\s*(report|scan|image|record)?.*$", "", t, flags=re.IGNORECASE).strip()
         t = re.sub(r"\s+(report|scan|image|record)$", "", t, flags=re.IGNORECASE).strip()

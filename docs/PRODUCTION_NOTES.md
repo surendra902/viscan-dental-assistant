@@ -46,8 +46,8 @@ This document addresses productionization requirements specified in Section 3 of
 ---
 
 ## 5. Failure Handling & Clinical Safety
-- **Hallucination Interception**: The business-rule validator (`app/validators.py`) rejects unverified entities (*"dragon teeth"*, *"quantum decay"*) regardless of what the LLM generates.
-- **Mandatory Review Flag**: `requires_review: true` ensures that no AI-generated draft report can ever be saved directly into an Electronic Health Record (EHR) or PACS without explicit human clinician sign-off.
+- **Hallucination Interception**: The business-rule validator (`app/validators.py`) rejects unverified entities (*"dragon teeth"*, *"quantum decay"*) and prevents semantic inventions (laterality flips, negation removal, pathology embellishment, or cross-site reassignment).
+- **Draft Status Flag**: `requires_review: true` explicitly tags every generated output as an unconfirmed draft. In a full production integration, this flag is designed to gate automated EHR/PACS persistence until an authenticated clinician applies an electronic signature.
 - **Graceful Degradation**:
-  - If STT audio is garbled or corrupted, the system prompts the doctor to repeat or switch to typed transcript.
-  - If patient identity is ambiguous, the system never guesses; it prompts for explicit disambiguation.
+  - If STT is unavailable or errors (`not-allowed`), existing user inputs and drafts are strictly preserved without fabricating synthetic clinical observations.
+  - If patient identity is ambiguous, the system halts retrieval and prompts for explicit disambiguation rather than guessing.

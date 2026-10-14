@@ -114,30 +114,123 @@ def detect_uncertainty(text: str) -> List[str]:
             detected.append(f"Observation contains uncertainty marker '{marker}'; clinician confirmation advised.")
     return detected
 
+LATERALITY_KEYWORDS = {
+    "left", "right", "bilateral", "unilateral",
+    "upper", "lower", "maxilla", "maxillary", "mandible", "mandibular",
+    "anterior", "posterior"
+}
+
+def extract_clauses(text: str) -> List[str]:
+    """Split transcript into semantic clauses, preserving punctuation boundaries."""
+    raw_clauses = re.split(r"[;]|\band\b|[,]", text, flags=re.IGNORECASE)
+    clauses = [c.strip() for c in raw_clauses if c.strip()]
+    return clauses if clauses else [text.strip()]
+
+def has_negation(text: str) -> bool:
+    """Detects presence of clinical negation tokens."""
+    t = text.lower()
+    return any(re.search(rf"\b{term}\b", t) for term in ["no", "not", "without", "absent", "denies", "neither"])
+
 def check_transcript_grounding(site: str, obs: str, raw_transcript: str) -> Tuple[bool, str]:
     """
-    Verifies that extracted anatomical site and observation have lexical grounding
-    in the source dictation to prevent ungrounded LLM hallucinations.
+    Verifies that extracted anatomical site and observation have lexical and semantic grounding
+    in the source dictation to prevent ungrounded LLM hallucinations, laterality shifts,
+    negation removal, pathology embellishment, and cross-site reassignments.
     """
     raw_lower = raw_transcript.lower()
-    site_lower = site.lower()
-    obs_lower = obs.lower()
+    site_lower = site.lower().strip()
+    obs_lower = obs.lower().strip()
 
-    # 1. Tooth number grounding: If site specifies a tooth number, that number MUST be in the transcript
+    # 1. Whole-token tooth number check: If site specifies a tooth number, that exact token MUST be in the transcript
     site_digits = re.findall(r"\b\d+\b", site_lower)
     for digit in site_digits:
-        if digit not in raw_lower:
+        if not re.search(rf"\b{digit}\b", raw_lower):
             return False, f"Extracted tooth number '{digit}' was not found in source dictation."
 
-    # 2. Site keyword grounding: Key descriptors must appear in source
-    site_words = [w for w in re.findall(r"\b[a-z]{3,}\b", site_lower) if w not in {"tooth", "teeth", "site", "area", "region", "generalized", "dentition"}]
-    if site_words and not any(w in raw_lower for w in site_words):
-        return False, f"Anatomical site '{site}' is not grounded in source dictation."
+    # 2. Check laterality descriptors: Any laterality term in site MUST exist in raw dictation without contradiction
+    for lat in LATERALITY_KEYWORDS:
+        if re.search(rf"\b{lat}\b", site_lower) and not re.search(rf"\b{lat}\b", raw_lower):
+            return False, f"Laterality descriptor '{lat}' in site '{site}' contradicts source dictation."
 
-    # 3. Observation keyword grounding: At least one clinical finding term must be grounded in transcript
+    # 3. Check pathology embellishment: Any clinical pathology term in observation MUST appear in source
+    for path in DENTAL_OBSERVATION_KEYWORDS:
+        # Check if a substantive multi-word or single-word pathology term is in candidate obs
+        if re.search(rf"\b{re.escape(path)}\b", obs_lower) and not re.search(rf"\b{re.escape(path)}\b", raw_lower):
+            # Check individual key words of the pathology
+            path_words = [w for w in re.findall(r"\b[a-z]{4,}\b", path) if w not in {"with", "some", "mild", "loss"}]
+            if any(re.search(rf"\b{re.escape(pw)}\b", obs_lower) and not re.search(rf"\b{re.escape(pw)}\b", raw_lower) for pw in path_words):
+                return False, f"Pathology '{path}' in observation '{obs}' was not mentioned in source dictation."
+
+    # 4. Check negation alignment:
+    obs_negated = has_negation(obs_lower)
+    raw_negated = has_negation(raw_lower)
+
+    # 5. Clause-level binding: Finding (site + observation) must be grounded in the same clause/span
+    clauses = extract_clauses(raw_transcript)
+    matched_clause = None
+
+    distinct_sites_count = 0
+    active_site_clause = None
+
+    for idx, clause in enumerate(clauses):
+        c_lower = clause.lower()
+        has_new_tooth = bool(re.search(r"\b\d+\b", c_lower))
+        has_new_laterality = any(lat in c_lower for lat in ["upper", "lower", "maxillary", "mandibular", "right", "left"])
+        has_generalized = any(g in c_lower for g in ["generalized", "diffuse", "full mouth"])
+
+        if has_new_tooth or has_new_laterality or has_generalized or idx == 0:
+            distinct_sites_count += 1
+
+        # Check if candidate site matches this clause (or inherited clause if continuation)
+        site_in_clause = False
+        if "generalized" in site_lower and has_generalized:
+            site_in_clause = True
+        elif site_digits:
+            site_in_clause = all(re.search(rf"\b{d}\b", c_lower) for d in site_digits)
+        else:
+            site_tokens = [w for w in re.findall(r"\b[a-z]{3,}\b", site_lower) if w not in {"tooth", "teeth", "site", "area"}]
+            site_in_clause = all(w in c_lower for w in site_tokens) if site_tokens else True
+
+        if not site_in_clause and not (has_new_tooth or has_new_laterality or has_generalized) and active_site_clause:
+            site_in_clause = True
+
+        if site_in_clause:
+            active_site_clause = clause
+            obs_tokens = [w for w in re.findall(r"\b[a-z]{3,}\b", obs_lower) if w not in {"shows", "with", "there", "have", "some", "mild", "deep", "has", "and"}]
+            if any(w in c_lower for w in obs_tokens):
+                matched_clause = clause
+                break
+        else:
+            if has_new_tooth or has_new_laterality or has_generalized:
+                active_site_clause = None
+
+    # If transcript has multiple distinct sites across clauses, ensure site and obs co-occur
+    if len(clauses) > 1 and distinct_sites_count > 1:
+        if not matched_clause:
+            return False, f"Finding '{obs}' was reassigned to '{site}' across different clauses in source dictation."
+
+    # Verify negation against the matched clause (or raw transcript)
+    target_text = matched_clause.lower() if matched_clause else raw_lower
+    clause_negated = has_negation(target_text)
+
+    if clause_negated and not obs_negated:
+        return False, f"Observation '{obs}' removes clinical negation present in source ('{target_text}')."
+    if obs_negated and not raw_negated:
+        return False, f"Observation '{obs}' invents clinical negation not present in source."
+
+    # 6. Basic site and obs grounding
+    if site_digits:
+        for digit in site_digits:
+            if not re.search(rf"\b{digit}\b", raw_lower):
+                return False, f"Extracted tooth number '{digit}' not found in source."
+    elif "generalized" not in site_lower:
+        site_words = [w for w in re.findall(r"\b[a-z]{3,}\b", site_lower) if w not in {"tooth", "teeth", "site", "area", "region"}]
+        if site_words and not any(w in raw_lower for w in site_words):
+            return False, f"Site '{site}' not grounded in source."
+
     obs_words = [w for w in re.findall(r"\b[a-z]{3,}\b", obs_lower) if w not in {"shows", "with", "there", "have", "some", "mild", "deep"}]
     if obs_words and not any(w in raw_lower for w in obs_words):
-        return False, f"Observation '{obs}' has no textual grounding in source dictation."
+        return False, f"Observation '{obs}' has no textual grounding."
 
     return True, ""
 

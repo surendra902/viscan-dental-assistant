@@ -846,3 +846,113 @@ body::before {
   font-size: 0.72rem;
   text-transform: uppercase;
 }
+
+/* Mobile Responsiveness Polish (390px and narrow viewports) */
+@media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  .app-shell {
+    padding: 8px 12px;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .announcement {
+    padding: 6px 10px;
+    font-size: 0.72rem;
+  }
+
+  .announcement__inner {
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .announcement__sub {
+    display: none;
+  }
+
+  .site-header {
+    padding: 10px 14px;
+  }
+
+  .header__inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .header__brand {
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .brand-tagline, .brand-divider {
+    display: none;
+  }
+
+  .header__controls {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .card {
+    padding: 12px;
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .card__header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip-row {
+    gap: 4px;
+  }
+
+  .chip {
+    white-space: normal;
+    font-size: 0.68rem;
+    padding: 3px 8px;
+  }
+
+  .tab-bar {
+    flex-wrap: wrap;
+  }
+
+  .dictate-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dictate-actions .btn {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .chat-form {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .chat-form .input-clean {
+    min-width: 0;
+  }
+}
+

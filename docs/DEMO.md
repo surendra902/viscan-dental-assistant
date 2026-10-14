@@ -19,7 +19,7 @@ curl -X GET "http://localhost:8000/health"
   "status": "healthy",
   "service": "viscan-dental-assistant",
   "mock_patients_loaded": 6,
-  "mock_reports_loaded": 9
+  "mock_reports_loaded": 13
 }
 ```
 

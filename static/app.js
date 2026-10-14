@@ -278,9 +278,44 @@ document.addEventListener("DOMContentLoaded", () => {
     btnApplyJson.addEventListener("click", () => {
       try {
         const rawJson = jsonOutput.value.trim();
-        if (!rawJson) return;
-        const parsed = JSON.parse(rawJson);
-        const findings = Array.isArray(parsed) ? parsed : (parsed.structured_findings || []);
+        if (!rawJson) {
+          alert("JSON editor is empty.");
+          return;
+        }
+
+        let parsed;
+        try {
+          parsed = JSON.parse(rawJson);
+        } catch (err) {
+          alert("Invalid JSON syntax: " + err.message);
+          return;
+        }
+
+        // Schema validation: verify findings array and required fields
+        let findings = null;
+        if (Array.isArray(parsed)) {
+          findings = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          if (Array.isArray(parsed.structured_findings)) {
+            findings = parsed.structured_findings;
+          } else if (Array.isArray(parsed.findings)) {
+            findings = parsed.findings;
+          }
+        }
+
+        if (!findings || !Array.isArray(findings) || findings.length === 0) {
+          alert("Invalid schema: JSON must contain a non-empty findings array (e.g. structured_findings) with 'anatomical_site' and 'observation' properties.");
+          return;
+        }
+
+        for (let i = 0; i < findings.length; i++) {
+          const f = findings[i];
+          if (!f || typeof f !== "object" || !f.anatomical_site || !f.observation || typeof f.anatomical_site !== "string" || typeof f.observation !== "string") {
+            alert(`Invalid schema in finding #${i + 1}: each finding must contain string properties for 'anatomical_site' and 'observation'.`);
+            return;
+          }
+        }
+
         const rawDictation = dictateInput.value.trim() || "Clinician Dictation";
 
         let draftText = "CLINICAL OBSERVATION REPORT (DRAFT - REQUIRES CLINICIAN REVIEW)\n\n";
@@ -288,8 +323,8 @@ document.addEventListener("DOMContentLoaded", () => {
         draftText += "Structured Observations (Clinician Edited):\n";
         findings.forEach(f => {
           const status = f.is_supported !== false ? "[VALIDATED]" : "[UNSUPPORTED / CAUTION]";
-          const site = f.anatomical_site || "Unspecified site";
-          const obs = f.observation || "Unspecified observation";
+          const site = f.anatomical_site;
+          const obs = f.observation;
           const conf = f.confidence !== undefined ? Number(f.confidence).toFixed(2) : "0.95";
           draftText += ` - ${status} Site: ${site} | Observation: ${obs} (Confidence: ${conf})\n`;
         });
@@ -297,9 +332,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         draftOutput.value = draftText;
         document.querySelector(`.tab-link[data-tab="tab-draft"]`).click();
-        appendBubble("bot", "Viscan Assistant", "Structured JSON edits applied. Draft report recompiled from updated findings.");
+        appendBubble("bot", "Viscan Assistant", "Structured JSON edits validated and applied. Draft report recompiled from updated findings.");
       } catch (err) {
-        alert("Invalid JSON format: " + err.message);
+        alert("Schema validation error: " + err.message);
       }
     });
   }
@@ -395,13 +430,9 @@ document.addEventListener("DOMContentLoaded", () => {
       activeVoiceTarget = null;
       activeRecognition = null;
 
-      // If speech recognition failed on remote host (e.g. network / not-allowed / audio-capture)
-      // and no speech was transcribed, provide seamless fallback query so user is never stranded
       if (!hasResult) {
         if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
-          appendBubble("bot", "Viscan Voice Assistant", `Microphone or cloud STT unavailable (${e.error}). Submitting sample voice query: "Open Priya Sharma's latest OPG report".`);
-          chatInput.value = "Open Priya Sharma's latest OPG report";
-          chatForm.dispatchEvent(new Event("submit"));
+          appendBubble("bot", "Viscan Voice Assistant", `Voice input unavailable (${e.error}). Please type your query or click one of the preset example queries.`);
         } else if (e.error === "no-speech") {
           appendBubble("bot", "Viscan Voice Assistant", "No speech was detected. Please click the mic again or type your query.");
         }
@@ -423,8 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btnVoiceChat.classList.remove("recording");
       activeVoiceTarget = null;
       activeRecognition = null;
-      chatInput.value = "Open Priya Sharma's latest OPG report";
-      chatForm.dispatchEvent(new Event("submit"));
+      appendBubble("bot", "Viscan Voice Assistant", "Voice input could not start. Please type your query or click a preset example.");
     }
   });
 
@@ -452,9 +482,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rec = getSpeechRecognition();
     if (!rec) {
-      // Browser does not support Web Speech API
-      dictateInput.value = "Lower right third molar is horizontally impacted";
-      processDictation();
+      alert("Voice recognition is not supported in this browser. Please type or paste your dictation, or select a preset sample.");
       return;
     }
 
@@ -483,10 +511,8 @@ document.addEventListener("DOMContentLoaded", () => {
       activeRecognition = null;
 
       if (!hasResult) {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "network") {
-          dictateInput.value = "Lower right third molar is horizontally impacted";
-          processDictation();
-        }
+        // Safe failure: preserve current input and draft, do NOT overwrite or auto-submit clinical text
+        appendBubble("bot", "Viscan Assistant", `Voice input unavailable (${e.error}). Existing transcript preserved; please type or paste your observations, or click an example preset.`);
       }
     };
 
@@ -507,8 +533,7 @@ document.addEventListener("DOMContentLoaded", () => {
       recordBtnText.textContent = "Voice Dictation";
       activeVoiceTarget = null;
       activeRecognition = null;
-      dictateInput.value = "Lower right third molar is horizontally impacted";
-      processDictation();
+      appendBubble("bot", "Viscan Assistant", "Voice input could not start. Please type or paste your dictation.");
     }
   });
 
