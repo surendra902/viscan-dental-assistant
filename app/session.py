@@ -46,6 +46,8 @@ class SessionManager:
     def add_message(self, session_id: str, role: str, content: str):
         sess = self.get_or_create(session_id)
         sess.history.append({"role": role, "content": content})
+        if len(sess.history) > 20:
+            sess.history = sess.history[-20:]
 
     def clear(self, session_id: str):
         if session_id in self._sessions:

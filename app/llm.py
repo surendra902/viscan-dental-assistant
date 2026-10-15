@@ -129,6 +129,35 @@ class LLMEngine:
             "summarize", "summary", "what did", "what were the findings", "tell me about"
         ])
 
+        # Guardrail: bulk / dump requests must never leak all records
+        _BULK_RE = r"\b(show\s+all|list\s+all|give\s+all|\bdump\b|all\s+patients|all\s+reports|all\s+data|every\s+patient|export\s+all|show\s+all\s+data)"
+        if __import__("re").search(_BULK_RE, msg_lower):
+            return {
+                "intent": "guardrail_bulk",
+                "status": "guardrail_blocked",
+                "response_text": ("I can't share all patient records at once. Tell me which patient you need (full name or patient ID, e.g. 'Priya Sharma' or 'P001') and I'll pull their latest report."),
+                "tool_calls": tool_calls_record,
+            }
+
+        # Conversational follow-up: modality switch / pronoun without explicit name
+        _follow_mod_m = __import__("re").search(r"\b(cbct|opg|iopa)\b", msg_lower)
+        _is_follow = _follow_mod_m or any(trig in msg_lower for trig in ["what about", "how about", "and her", "and his", "her cbct", "his cbct", "her opg", "his opg"])
+        if _is_follow and session.last_patient_id and not __import__("re").search(r"\b(priya|arjun|sara|vikram|ananya|\bp00)", msg_lower):
+            pat = data_store.get_patient_by_id(session.last_patient_id)
+            if pat:
+                mod = _follow_mod_m.group(1).upper() if _follow_mod_m else session.last_modality
+                rep = get_latest_report(pat.patient_id, mod) if mod else get_latest_report(pat.patient_id)
+                if not rep:
+                    msg = (f"No {mod} report found for {pat.name} ({pat.patient_id})." if mod else f"No reports found for {pat.name} ({pat.patient_id}).")
+                    return {"intent": "retrieve_report", "status": "not_found", "response_text": msg + " Available modalities: OPG, CBCT, IOPA.", "patient": pat, "report": None, "evidence": None, "tool_calls": tool_calls_record}
+                if _follow_mod_m:
+                    session_manager.update_context(session.session_id, modality=rep.modality)
+                session_manager.update_context(session.session_id, report_id=rep.report_id)
+                tool_calls_record.append({"tool": "get_report_evidence", "arguments": {"report_id": rep.report_id}})
+                evidence = get_report_evidence(rep)
+                findings_bullets = "\n".join([f"  \u2022 {f}" for f in rep.findings])
+                return {"intent": "retrieve_report", "status": "success", "response_text": (f"Retrieved {rep.modality} report for {pat.name} ({pat.patient_id}) dated {rep.date[:10]}:\n" f"Referring Doctor: {rep.referring_doctor}\nFindings:\n{findings_bullets}\nImpression: {rep.impression}"), "patient": pat, "report": rep, "evidence": evidence, "tool_calls": tool_calls_record}
+
         # Feature A/B: If an explicit patient name was specified, resolve that patient directly
         if explicit_patient:
             modality = None
@@ -145,10 +174,12 @@ class LLMEngine:
             })
 
             if len(patients) == 0:
+                suggestion = self._did_you_mean(explicit_patient)
+                hint = f" Did you mean '{suggestion}'?" if suggestion else ""
                 return {
                     "intent": "retrieve_report" if not is_summary_request else "follow_up_summary",
                     "status": "not_found",
-                    "response_text": f"Patient '{explicit_patient}' not found in records. Please verify the name or patient ID.",
+                    "response_text": f"Patient '{explicit_patient}' not found in records.{hint} Please verify the name or patient ID.",
                     "tool_calls": tool_calls_record
                 }
 
@@ -354,6 +385,12 @@ class LLMEngine:
             "tool_calls": tool_calls_record
         }
 
+    def _did_you_mean(self, query: str):
+        import difflib
+        known = ["Priya Sharma", "Priya Menon", "Arjun Patel", "Sara Khan", "Vikram Desai", "Ananya Rao"]
+        m = difflib.get_close_matches(query, known, n=1, cutoff=0.6)
+        return m[0] if m else None
+
     def _extract_patient_name(self, text: str) -> str:
         """Extracts patient name candidate from natural language with robust phrase & paraphrase handling."""
         t_clean = text.strip()
@@ -364,7 +401,9 @@ class LLMEngine:
         if pid:
             return pid
 
-        # 1. Match known mock patients by full name or specific name tokens
+        # 1. Match known patients by exact full-name only (typo guardrail).
+        # Typos like "Arjun Patil" or "Priya Sharna" must NOT resolve to a
+        # canonical name - they fall through and 404 with a did-you-mean hint.
         known_patients = [
             ("Priya Sharma", ["priya sharma"]),
             ("Priya Menon", ["priya menon"]),
@@ -378,15 +417,33 @@ class LLMEngine:
                 if re.search(rf"\b{re.escape(alias)}\b", t_lower):
                     return canonical
 
-        # Check ambiguous or single token triggers
+        # Ambiguous / typo-aware single-token triggers
         if re.search(r"\bpriya\b", t_lower) and not re.search(r"\b(sharma|menon)\b", t_lower):
             return "Priya"
+        arjun_m = re.search(r"\barjun\s+(\w+)", t_lower)
+        if arjun_m:
+            if arjun_m.group(1) == "patel":
+                return "Arjun Patel"
+            raw = re.search(r"\barjun\s+\w+", t_clean, re.IGNORECASE)
+            return raw.group(0).strip() if raw else "Arjun Patel"
         if re.search(r"\barjun\b", t_lower):
             return "Arjun Patel"
+        sara_m = re.search(r"\bsara\s+(\w+)", t_lower)
+        if sara_m and sara_m.group(1) != "khan":
+            raw = re.search(r"\bsara\s+\w+", t_clean, re.IGNORECASE)
+            return raw.group(0).strip() if raw else "Sara Khan"
         if re.search(r"\bsara\b", t_lower):
             return "Sara Khan"
+        vik_m = re.search(r"\bvikram\s+(\w+)", t_lower)
+        if vik_m and vik_m.group(1) != "desai":
+            raw = re.search(r"\bvikram\s+\w+", t_clean, re.IGNORECASE)
+            return raw.group(0).strip() if raw else "Vikram Desai"
         if re.search(r"\bvikram\b", t_lower):
             return "Vikram Desai"
+        ana_m = re.search(r"\bananya\s+(\w+)", t_lower)
+        if ana_m and ana_m.group(1) != "rao":
+            raw = re.search(r"\bananya\s+\w+", t_clean, re.IGNORECASE)
+            return raw.group(0).strip() if raw else "Ananya Rao"
         if re.search(r"\bananya\b", t_lower):
             return "Ananya Rao"
 

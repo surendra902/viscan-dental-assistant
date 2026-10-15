@@ -69,6 +69,11 @@ def get_patient_reports(patient_id: str):
         return []
     return reports
 
+@app.get("/history")
+def get_history(session_id: str):
+    sess = session_manager.get_or_create(session_id)
+    return {"session_id": sess.session_id, "history": sess.history, "last_patient_id": sess.last_patient_id, "last_report_id": sess.last_report_id, "last_modality": sess.last_modality}
+
 @app.post("/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest):
     """
@@ -97,6 +102,11 @@ def chat_endpoint(request: ChatRequest):
 
     session_manager.add_message(request.session_id, "assistant", response.response_text)
     return response
+
+@app.delete("/history")
+def clear_history(session_id: str):
+    session_manager.clear(session_id)
+    return {"cleared": True, "session_id": session_id}
 
 @app.post("/dictate", response_model=DictateResponse)
 def dictate_endpoint(request: DictateRequest):
