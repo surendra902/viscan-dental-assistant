@@ -12,7 +12,7 @@ if env_path.exists():
 
 from app.models import Patient, Report, StructuredFinding
 from app.data_store import data_store
-from app.tools import find_patient, get_latest_report, list_reports, get_report_evidence
+from app.tools import find_patient, get_latest_report, list_reports, get_report_evidence, normalize_patient_id
 from app.session import SessionState, session_manager
 
 class LLMEngine:
@@ -79,17 +79,21 @@ class LLMEngine:
         msg_clean = message.strip()
         msg_lower = msg_clean.lower()
 
-        # 1. Disambiguation selection check (e.g. user replies "Priya Sharma", "P001", "Priya Menon")
+        # 1. Disambiguation selection check (e.g. user replies "Priya Sharma", "P001", "Priya Menon", "P 006", "patient ID P 006")
+        is_direct_id_selection = bool(re.match(r"^\s*(?:(?:patient\s*(?:id)?|pid|id)\s*:?\s*)?p\s*[-_ ]*(\d[\d\s]{0,4}\d|\d)\s*$", msg_clean, re.IGNORECASE))
+        norm_disambig_id = normalize_patient_id(msg_clean) if is_direct_id_selection else None
         is_direct_disambiguation = (
+            is_direct_id_selection or
             re.match(r"^p00[1-6]$", msg_lower) or
             msg_clean in ["Priya Sharma", "Priya Menon"] or
             re.match(r"^(priya\s+sharma|priya\s+menon)$", msg_lower)
         )
         if is_direct_disambiguation:
-            direct_matches = find_patient(msg_clean)
+            lookup_key = norm_disambig_id if norm_disambig_id else msg_clean
+            direct_matches = find_patient(lookup_key)
             tool_calls_record.append({
                 "tool": "find_patient",
-                "arguments": {"name": msg_clean},
+                "arguments": {"name": lookup_key},
                 "result_count": len(direct_matches)
             })
             if len(direct_matches) == 1:
@@ -165,6 +169,31 @@ class LLMEngine:
 
             # Exactly 1 unambiguous match
             patient = patients[0]
+
+            # Check if this is an identity query (e.g. "what is the patient name of PID p004", "who is patient p004")
+            is_identity_request = any(k in msg_lower for k in [
+                "patient name", "name of patient", "who is", "name of pid", "patient details", "name of id", "identify patient"
+            ])
+            if is_identity_request:
+                resp_text = (
+                    f"Patient ID {patient.patient_id} is {patient.name} "
+                    f"(DOB: {patient.date_of_birth}, Gender: {patient.gender})."
+                )
+                session_manager.update_context(
+                    session.session_id,
+                    patient_id=patient.patient_id,
+                    patient_name=patient.name
+                )
+                return {
+                    "intent": "patient_identity",
+                    "status": "success",
+                    "response_text": resp_text,
+                    "patient": patient,
+                    "report": None,
+                    "evidence": None,
+                    "tool_calls": tool_calls_record
+                }
+
             tool_calls_record.append({
                 "tool": "get_latest_report",
                 "arguments": {"patient_id": patient.patient_id, "modality": modality}
@@ -329,6 +358,11 @@ class LLMEngine:
         """Extracts patient name candidate from natural language with robust phrase & paraphrase handling."""
         t_clean = text.strip()
         t_lower = t_clean.lower()
+
+        # 0. Check for explicit patient ID mention (e.g. "P 006", "ID P 006", "PID p004", "patient ID P 006")
+        pid = normalize_patient_id(t_clean)
+        if pid:
+            return pid
 
         # 1. Match known mock patients by full name or specific name tokens
         known_patients = [
