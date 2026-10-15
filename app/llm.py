@@ -64,6 +64,13 @@ class LLMEngine:
         cand_lower = extracted.strip().lower()
         if cand_lower in PRONOUNS_AND_NON_NAMES:
             return None
+        # Guard: sentence-like extractions are not patient names (e.g. "when did she came to hospital")
+        if len(cand_lower.split()) > 3:
+            return None
+        if re.search(r"\b(when|where|what|how|why|which|who|did|does|came|come|hospital|visit|came to|come to)\b", cand_lower):
+            # Allow if it's clearly a name that happens to contain a trigger word - but names above are 1-2 words
+            # So any multi-word trigger match is not a name
+            return None
         tokens = cand_lower.split()
         sub_tokens = [tok for tok in tokens if tok not in PRONOUNS_AND_NON_NAMES]
         if not sub_tokens:
@@ -376,6 +383,57 @@ class LLMEngine:
                 "evidence": evidence,
                 "tool_calls": tool_calls_record
             }
+
+        # 3b. Generic pronoun contextual follow-up (RAG history) — e.g. "when did she come to hospital?"
+        # Catches temporal/pronoun queries that reuse the last patient from session history.
+        if session.last_patient_id and not explicit_patient:
+            has_pronoun = bool(re.search(r"\b(she|her|his|he|they|them)\b", msg_lower))
+            is_temporal = any(k in msg_lower for k in ["when", "date", "came", "come", "visit", "hospital", "admitted", "last visit"])
+            has_history = len(session.history) > 0
+            if has_pronoun and (is_temporal or (has_history and len(msg_clean.split()) <= 8)):
+                pat = data_store.get_patient_by_id(session.last_patient_id)
+                if pat:
+                    rep = None
+                    if session.last_report_id:
+                        cand = data_store.get_report_by_id(session.last_report_id)
+                        if cand and cand.patient_id.lower() == pat.patient_id.lower():
+                            rep = cand
+                    if not rep:
+                        rep = get_latest_report(pat.patient_id, session.last_modality) or get_latest_report(pat.patient_id)
+                    if rep:
+                        tool_calls_record.append({"tool": "get_report_evidence", "arguments": {"report_id": rep.report_id}})
+                        evidence = get_report_evidence(rep)
+                        if is_temporal:
+                            return {
+                                "intent": "follow_up_context",
+                                "status": "success",
+                                "response_text": (
+                                    f"{pat.name} ({pat.patient_id})'s latest {rep.modality} report is dated {rep.date[:10]} "
+                                    f"(Referring Doctor: {rep.referring_doctor}). {rep.evidence_snippet}"
+                                ),
+                                "patient": pat,
+                                "report": rep,
+                                "evidence": evidence,
+                                "tool_calls": tool_calls_record,
+                            }
+                        # generic short pronoun follow-up -> return summary from history context
+                        summary_lines = [
+                            f"Summary for {pat.name} ({rep.modality} dated {rep.date[:10]}):",
+                            f"- Clinical Indication: {rep.clinical_indication}",
+                            "- Key Findings:",
+                        ]
+                        for f in rep.findings:
+                            summary_lines.append(f"  * {f}")
+                        summary_lines.append(f"- Diagnostic Impression: {rep.impression}")
+                        return {
+                            "intent": "follow_up_summary",
+                            "status": "success",
+                            "response_text": "\n".join(summary_lines),
+                            "patient": pat,
+                            "report": rep,
+                            "evidence": evidence,
+                            "tool_calls": tool_calls_record,
+                        }
 
         # Fallback for general unparsed requests
         return {
