@@ -122,13 +122,17 @@ def build_pdf():
     story.append(meta_table)
     story.append(Spacer(1, 10))
 
-    story.append(Paragraph("<b>Why I built this this way:</b>", ParagraphStyle("H2", parent=h1_style, fontSize=11, leading=14)))
+    story.append(Paragraph("<b>Architecture &amp; Specification Alignment:</b>", ParagraphStyle("H2", parent=h1_style, fontSize=11, leading=14)))
     intro_p = (
-        "General-purpose language models often invent tooth numbers or diagnoses when asked clinical questions. "
-        "To avoid this, I split the pipeline into two parts: an LLM that only extracts entity slots (patient names, "
-        "modalities, anatomical sites), and deterministic Python code that queries local data files and validates "
-        "findings against a dental anatomy allowlist. The web interface has two workspaces: the left card handles "
-        "report lookup and multi-turn chat memory, while the right card handles audio dictation and draft validation."
+        "The brief asks for LLM interpretation to be separate from business-rule validation, so I split the system "
+        "along that line. The LLM (OpenRouter Nemotron) only proposes candidate findings from dictated text: an "
+        "anatomical site and an observation. Everything that decides what counts as fact is deterministic Python. "
+        "find_patient and get_latest_report read the mock JSON data, and validators.py checks each candidate against a "
+        "dental anatomy and pathology allowlist before it reaches the draft. Report retrieval and follow-ups use a "
+        "rule-based parser with the same tools, so those answers come from stored report text. If the LLM call fails "
+        "or times out, a local parser takes over and the same validation applies. The UI has two panels: the left "
+        "handles report lookup and multi-turn follow-ups (Features A and C), and the right handles dictation, "
+        "editable JSON and draft review (Feature B)."
     )
     story.append(Paragraph(intro_p, body_style))
     story.append(Spacer(1, 8))
