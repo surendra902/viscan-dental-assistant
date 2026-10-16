@@ -39,8 +39,8 @@ This document addresses productionization requirements specified in Section 3 of
   - OpenAI Whisper API: ~$0.006 per minute. An average dental dictation is 30 seconds (~$0.003/dictation).
   - Open-source self-hosted Whisper (faster-whisper on local T4/A10 GPU): Fixed hardware cost, ~$0.0004/minute at high volume.
 - **LLM Reasoning**:
-  - Structured extraction & intent parsing does not require expensive frontier frontier reasoning models (e.g., Claude 3.5 Sonnet / GPT-4o).
-  - High-efficiency models like `gpt-4o-mini` ($0.15 / 1M input tokens, $0.60 / 1M output tokens) or Claude 3.5 Haiku cost less than **$0.0003 per turn**.
+  - Structured extraction & intent parsing does not require expensive frontier reasoning models (e.g., GPT-4o).
+  - High-efficiency models like `gpt-4o-mini` ($0.15 / 1M input tokens, $0.60 / 1M output tokens) or lightweight open models cost less than **$0.0003 per turn**.
   - In offline / mock mode: $0.00.
 
 ---
