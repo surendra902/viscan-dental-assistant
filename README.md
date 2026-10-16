@@ -2,7 +2,7 @@
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.133-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/pytest-11%2F11%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/pytest-37%2F37%20passing-brightgreen.svg)](tests/)
 [![Render](https://img.shields.io/badge/Render-Live%20Deploy-46E3B7.svg)](https://viscan-dental-assistant.onrender.com)
 [![License](https://img.shields.io/badge/data-100%25%20synthetic-orange.svg)](#6-synthetic-clinical-dataset)
 
@@ -82,6 +82,11 @@ The **Viscan AI Dental Assistant** solves this through a **Decoupled Architectur
 
 ## 3. How It Works Under the Hood
 
+> **UI Workspace Architecture Note**:  
+> The 3 core specification features map directly into **2 side-by-side clinical workspace panels** on the website:
+> - **Left Workspace (`MODULES 01 & 03 · FEATURES A & C`)**: Combines **Report Retrieval (Feature A)** and **Conversational Multi-Turn Follow-Up (Feature C)** into a unified natural dialogue stream so clinicians can pull reports and immediately ask contextual questions without breaking context.
+> - **Right Workspace (`MODULE 02 · FEATURE B`)**: Dedicated **Clinical Dictation Studio (Feature B)** with speech-to-text recording, dental anatomy allowlist validation, editable JSON schema, and draft compilation.
+
 ### Module 01: Report Retrieval & Safe Disambiguation (Feature A)
 1. **Slot Extraction**: The input query (e.g., *"Open Priya Sharma's latest OPG report"*) is parsed into:
    - `patient_name_query`: `"Priya Sharma"`
@@ -107,6 +112,16 @@ The **Viscan AI Dental Assistant** solves this through a **Decoupled Architectur
 4. **Draft Status Labeling**: The schema explicitly tags every output with `requires_review: true`, ensuring downstream systems treat the generated findings as an unconfirmed draft requiring clinician sign-off.
 
 ### Module 03: Conversational Multi-Turn Follow-Up (Feature C)
+
+> **Screenshot script — run in order, same session** (`session_id` fixed in the UI; `docs/DEMO.md` has full outputs).
+ `1) Open Priya Sharma latest OPG report` -> success R101 OPG 2026-01-15 · tool_calls: find_patient, get_latest_report, get_report_evidence
+ `2) Summarize her report` -> follow_up_summary, same R101, evidence shown
+ `3) when did she came to hospital` -> follow_up_context (temporal RAG over session history, not a name parse)
+ `4) what about her CBCT?` -> success R103 CBCT 2026-02-01 (modality switch)
+ `5) Dictation: Lower right third molar is horizontally impacted` -> structured JSON + draft, requires_review:true
+ Guardrails: `show all patients` -> guardrail_blocked; `Arjun Patil latest report` -> Did you mean Arjun Patel?; `dragon teeth` -> unsupported_claims; `Open Priya latest OPG` -> ambiguous.
+ After the sequence `GET /history?session_id=...` shows the 6-turn RAG context.
+
 1. **State Tracking (`app/session.py`)**: An in-memory `SessionManager` tracks `last_patient_id`, `last_patient_name`, and `last_report_id` keyed by `session_id`.
 2. **Explicit Name Priority & Pronoun Resolution**:
    - If an explicit patient name is supplied (e.g. *"Summarize Sara Khan's report"*), the assistant resolves that patient directly without inheriting previous patient context.
