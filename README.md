@@ -287,7 +287,7 @@ TARGET_URL=https://viscan-dental-assistant.onrender.com python tests/audit_bench
 
 ---
 
-## 10. Production Considerations (PDF §3 Compliance)
+## 10. Production Considerations 
 
 1. **Privacy & PHI Protection**: Zero real patient data. In production, an on-premise PII scrubber (e.g., Microsoft Presidio) would sanitize names prior to LLM extraction, and sessions would be stored in ephemeral encrypted Redis with 15-minute TTLs.
 2. **Authorization (RBAC)**: Role separation between `Radiologist` (dictation approval), `Assistant` (report lookup), and `Auditor` (read-only audit trails).
@@ -303,29 +303,11 @@ TARGET_URL=https://viscan-dental-assistant.onrender.com python tests/audit_bench
 
 ---
 
-## 11. Hosting & Deployment (Render vs. Vercel)
 
-### Why Render is the Selected Architecture
-| Criterion | Render (Selected) | Vercel |
-| :--- | :--- | :--- |
-| **Execution Model** | **Persistent, stateful Python process** | Ephemeral, stateless Serverless Lambdas |
-| **Session Memory** | **Survives across conversational turns** | Wiped on every cold start / new invocation |
-| **Framework Support** | **Native ASGI (`uvicorn app.main:app`)** | Requires `@vercel/python` WSGI shim |
-| **Audio Uploads** | Standard streaming multipart body | 4.5 MB serverless request ceiling |
-| **Automation** | **Declarative `render.yaml` Blueprint** | Manual `vercel.json` rewrites |
-
-Because **Feature C (Conversational Follow-Up)** requires maintaining session context across turns without an external database in this proof-of-concept, Render provides a persistent execution environment.
-
-### Deploying to Render
-1. Open [dashboard.render.com](https://dashboard.render.com/) and click **New +** > **Blueprint**.
-2. Connect your fork or repository: `https://github.com/surendra902/viscan-dental-assistant`.
-3. Render reads [`render.yaml`](render.yaml) automatically.
-4. Set the `OPENROUTER_API_KEY` secret variable in the Render dashboard.
-5. Click **Apply**.
 
 ---
 
-## 12. Project Directory Structure
+## 11. Project Directory Structure
 
 ```
 viscan-dental-assistant/
@@ -363,14 +345,3 @@ viscan-dental-assistant/
 └── README.md                # Comprehensive documentation
 ```
 
----
-
-## 13. Deliverables Index
-
-- **Architecture Document**: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **Documented API Demo Calls & Outputs**: [`docs/DEMO.md`](docs/DEMO.md)
-- **Production Notes (Privacy, Auth, Latency, Cost)**: [`docs/PRODUCTION_NOTES.md`](docs/PRODUCTION_NOTES.md)
-- **Synthetic Data**: [`data/patients.json`](data/patients.json) & [`data/reports.json`](data/reports.json)
-- **Render Blueprint**: [`render.yaml`](render.yaml)
-- **Live GitHub Repository**: [https://github.com/surendra902/viscan-dental-assistant](https://github.com/surendra902/viscan-dental-assistant)
-- **Live Production App**: [https://viscan-dental-assistant.onrender.com](https://viscan-dental-assistant.onrender.com)
