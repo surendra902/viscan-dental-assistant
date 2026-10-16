@@ -94,7 +94,6 @@ def build_pdf():
     # PAGE 1: Engineering Overview & Limitations
     # =========================================================================
     story.append(Paragraph("Viscan Dental Assistant: Verification Walkthrough", title_style))
-    story.append(Paragraph("Final-Year Engineering Project Submission | Live System Verification", subtitle_style))
 
     meta_data = [
         [
